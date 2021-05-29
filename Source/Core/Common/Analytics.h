@@ -6,7 +6,7 @@
 
 #include <chrono>
 #include <memory>
-#include <shared_mutex>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -59,16 +59,19 @@ public:
   AnalyticsReportBuilder();
   ~AnalyticsReportBuilder() = default;
 
-  AnalyticsReportBuilder(const AnalyticsReportBuilder& other) : m_report{other.Get()} {}
-  AnalyticsReportBuilder(AnalyticsReportBuilder&& other) : m_report{other.Consume()} {}
+  AnalyticsReportBuilder(const AnalyticsReportBuilder& other) { *this = other; }
+  AnalyticsReportBuilder(AnalyticsReportBuilder&& other)
+  {
+    std::lock_guard lk{other.m_lock};
+    m_report = std::move(other.m_report);
+  }
 
   const AnalyticsReportBuilder& operator=(const AnalyticsReportBuilder& other)
   {
     if (this != &other)
     {
-      std::string other_report = other.Get();
-      std::lock_guard lk{m_lock};
-      m_report = std::move(other_report);
+      std::scoped_lock lk{m_lock, other.m_lock};
+      m_report = other.m_report;
     }
     return *this;
   }
@@ -103,7 +106,7 @@ public:
 
   std::string Get() const
   {
-    std::shared_lock lk{m_lock};
+    std::lock_guard lk{m_lock};
     return m_report;
   }
 
@@ -126,7 +129,8 @@ protected:
 
   static void AppendSerializedValueVector(std::string* report, const std::vector<u32>& v);
 
-  mutable std::shared_mutex m_lock;
+  // Should really be a std::shared_mutex, unfortunately that's C++17 only.
+  mutable std::mutex m_lock;
   std::string m_report;
 };
 
