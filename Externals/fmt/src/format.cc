@@ -23,9 +23,12 @@ int format_float(char* buf, std::size_t size, const char* format, int precision,
   return precision < 0 ? snprintf_ptr(buf, size, format, value)
                        : snprintf_ptr(buf, size, format, precision, value);
 }
-}  // namespace detail
 
-template struct FMT_INSTANTIATION_DEF_API detail::basic_data<void>;
+template FMT_API dragonbox::decimal_fp<float> dragonbox::to_decimal(float x)
+    FMT_NOEXCEPT;
+template FMT_API dragonbox::decimal_fp<double> dragonbox::to_decimal(double x)
+    FMT_NOEXCEPT;
+}  // namespace detail
 
 // Workaround a bug in MSVC2013 that prevents instantiation of format_float.
 int (*instantiate_format_float)(double, int, detail::float_specs,
@@ -66,4 +69,7 @@ template FMT_API wchar_t detail::decimal_point_impl(locale_ref);
 
 template FMT_API void detail::buffer<wchar_t>::append(const wchar_t*,
                                                       const wchar_t*);
+
+template struct detail::basic_data<void>;
+
 FMT_END_NAMESPACE
