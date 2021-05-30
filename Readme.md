@@ -1,3 +1,17 @@
+# Dolphin for Legacy Mac OS X
+
+This fork of Dolphin has been lightly modified to add compatibility with Mac OS X 10.9 Mavericks. It probably also works on OS X 10.10 – 10.11.
+
+This was made possible primarily by the MacPorts's project toolchain backports and legacy-support library. The code changes here primarily remove a few uses of shared_mutex.
+
+To build, use Mavericks and:
+
+1. Build and install patched QT 5.9: https://github.com/Wowfunhappy/qt5.9-base-mavericks
+2. sudo port install legacy-support clang-11 hidapi
+3. cmake -DCMAKE_C_COMPILER=/opt/local/bin/clang-mp-11 -DCMAKE_CXX_COMPILER=/opt/local/bin/clang++-mp-11 -DENABLE_VULKAN=OFF -DCMAKE_PREFIX_PATH=/usr/local/Qt-5.9.9/ ../dolphin/
+
+----
+
 # Dolphin - A GameCube and Wii Emulator
 
 [Homepage](https://dolphin-emu.org/) | [Project Site](https://github.com/dolphin-emu/dolphin) | [Buildbot](https://dolphin.ci) | [Forums](https://forums.dolphin-emu.org/) | [Wiki](https://wiki.dolphin-emu.org/) | [Issue Tracker](https://bugs.dolphin-emu.org/projects/emulator/issues) | [Coding Style](https://github.com/dolphin-emu/dolphin/blob/master/Contributing.md) | [Transifex Page](https://www.transifex.com/projects/p/dolphin-emu/)
