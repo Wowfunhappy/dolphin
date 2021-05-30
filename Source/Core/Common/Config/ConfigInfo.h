@@ -97,14 +97,14 @@ public:
 
   CachedValue<T> GetCachedValue() const
   {
-    std::shared_lock lock(m_cached_value_mutex);
+    std::lock_guard lock(m_cached_value_mutex);
     return m_cached_value;
   }
 
   template <typename U>
   CachedValue<U> GetCachedValueCasted() const
   {
-    std::shared_lock lock(m_cached_value_mutex);
+    std::lock_guard lock(m_cached_value_mutex);
     return CachedValue<U>{static_cast<U>(m_cached_value.value), m_cached_value.config_version};
   }
 
@@ -120,6 +120,6 @@ private:
   T m_default_value;
 
   mutable CachedValue<T> m_cached_value;
-  mutable std::shared_mutex m_cached_value_mutex;
+  mutable std::mutex m_cached_value_mutex;
 };
 }  // namespace Config

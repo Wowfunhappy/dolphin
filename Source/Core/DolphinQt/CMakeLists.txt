@@ -491,9 +491,9 @@ if(APPLE)
   target_sources(dolphin-emu PRIVATE "${qtcocoa_location}")
   set_source_files_properties("${qtcocoa_location}" PROPERTIES MACOSX_PACKAGE_LOCATION MacOS/platforms)
 
-  get_target_property(qtmacstyle_location Qt5::QMacStylePlugin LOCATION)
-  target_sources(dolphin-emu PRIVATE "${qtmacstyle_location}")
-  set_source_files_properties("${qtmacstyle_location}" PROPERTIES MACOSX_PACKAGE_LOCATION MacOS/styles)
+  #get_target_property(qtmacstyle_location Qt5::QMacStylePlugin LOCATION)
+  #target_sources(dolphin-emu PRIVATE "${qtmacstyle_location}")
+  #set_source_files_properties("${qtmacstyle_location}" PROPERTIES MACOSX_PACKAGE_LOCATION MacOS/styles)
 
   # Copy resources into the bundle
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/Data/Sys")

@@ -12,7 +12,8 @@ cmake_minimum_required(VERSION 3.10)
 # This is done in the universal binary building script to build a binary that 
 # runs on 10.12 on x86_64 computers, while still containing an arm64 slice.
 
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.14.0" CACHE STRING "")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "10.9.5" CACHE STRING "")
+include_directories(/opt/local/include/LegacySupport)
 
 set(CMAKE_USER_MAKE_RULES_OVERRIDE "CMake/FlagsOverride.cmake")
 
@@ -21,7 +22,7 @@ project(dolphin-emu)
 # Name of the Dolphin distributor. If you redistribute Dolphin builds (forks,
 # unofficial builds) please consider identifying your distribution with a
 # unique name here.
-set(DISTRIBUTOR "None" CACHE STRING "Name of the distributor.")
+set(DISTRIBUTOR "Wowfunhappy" CACHE STRING "Name of the distributor.")
 
 set(DOLPHIN_DEFAULT_UPDATE_TRACK "" CACHE STRING "Name of the default update track. If empty, disables auto-update.")
 

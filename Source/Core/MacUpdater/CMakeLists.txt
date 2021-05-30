@@ -1,3 +1,7 @@
+#Doesn't work on 10.9
+return()
+
+
 set(STORYBOARDS Main.storyboard)
 
 set(SOURCES
