@@ -236,12 +236,6 @@ PixelShaderUid GetPixelShaderUid()
   for (unsigned int n = 0; n < numStages; n++)
   {
     uid_data->stagehash[n].tevorders_texcoord = bpmem.tevorders[n / 2].getTexCoord(n & 1);
-
-    // hasindstage previously was used as a criterion to set tevind to 0, but there are variables in
-    // tevind that are used even if the indirect stage is disabled, so now it is only left in to
-    // avoid breaking existing UIDs (in most cases, games will have 0 in tevind anyways)
-    // TODO: Remove hasindstage on the next UID version bump
-    uid_data->stagehash[n].hasindstage = bpmem.tevind[n].bt < bpmem.genMode.numindstages;
     uid_data->stagehash[n].tevind = bpmem.tevind[n].hex;
 
     TevStageCombiner::ColorCombiner& cc = bpmem.combiners[n].colorC;
@@ -495,9 +489,18 @@ void UpdateBoundingBoxBuffer(int2 min_pos, int2 max_pos) {{
 }}
 
 void UpdateBoundingBox(float2 rawpos) {{
+  // We only want to include coordinates for pixels aligned with the native resolution pixel centers.
+  // This makes bounding box sizes more accurate (though not perfect) at higher resolutions,
+  // avoiding EFB copy buffer overflow in affected games.
+  //
+  // For a more detailed explanation, see https://dolp.in/pr9801
+  int2 int_efb_scale = iround(1 / {efb_scale}.xy);
+  if (any(int2(rawpos) % int_efb_scale != int_efb_scale >> 1))  // divide by two
+    return;
+
   // The rightmost shaded pixel is not included in the right bounding box register,
   // such that width = right - left + 1. This has been verified on hardware.
-  int2 pos = int2(rawpos * cefbscale);
+  int2 pos = int2(rawpos * {efb_scale}.xy);
 
 #ifdef API_OPENGL
   // We need to invert the Y coordinate due to OpenGL's lower-left origin
@@ -506,8 +509,8 @@ void UpdateBoundingBox(float2 rawpos) {{
 
   // The GC/Wii GPU rasterizes in 2x2 pixel groups, so bounding box values will be rounded to the
   // extents of these groups, rather than the exact pixel.
-  int2 pos_tl = pos & ~1;
-  int2 pos_br = pos | 1;
+  int2 pos_tl = pos & ~1;  // round down to even
+  int2 pos_br = pos | 1;   // round up to odd
 
 #ifdef SUPPORTS_SUBGROUP_REDUCTION
   if (CAN_USE_SUBGROUP_REDUCTION) {{
@@ -526,7 +529,7 @@ void UpdateBoundingBox(float2 rawpos) {{
 }}
 
 )",
-              fmt::arg("efb_height", EFB_HEIGHT));
+              fmt::arg("efb_height", EFB_HEIGHT), fmt::arg("efb_scale", I_EFBSCALE));
   }
 }
 
