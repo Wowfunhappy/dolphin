@@ -4,7 +4,14 @@ This fork of Dolphin has been lightly modified to add compatibility with Mac OS 
 
 This was made possible primarily by the MacPorts's project toolchain backports and legacy-support library. The code changes here primarily remove a few uses of shared_mutex.
 
-To build, use Mavericks and:
+## Known Issues
+You should go into Settings → Interface and uncheck "Confirm on Stop". Otherwise, Dolphin will sometimes crash when exiting a game from fullscreen mode.
+
+Attempting to map buttons on certain controllers causes Dolphin to freeze for a few minutes. To work around this, right click the buttons to use the advanced "Configure Input" dialog. If you hold down the button on your controller as this dialog opens, it'll be easy to tell which one to select.
+
+## Building
+
+On Mavericks:
 
 1. Build and install patched QT 5.9: https://github.com/Wowfunhappy/qt5.9-base-mavericks
 2. sudo port install legacy-support clang-11 hidapi
