@@ -4,6 +4,8 @@ This fork of Dolphin has been lightly modified to add compatibility with Mac OS 
 
 This was made possible primarily by the MacPorts's project toolchain backports and legacy-support library. The code changes here primarily remove a few uses of shared_mutex.
 
+# Download from https://jonathanalland.com/old-osx-projects.html
+
 ## Known Issues
 You should go into Settings → Interface and uncheck "Confirm on Stop". Otherwise, Dolphin will sometimes crash when exiting a game from fullscreen mode.
 
