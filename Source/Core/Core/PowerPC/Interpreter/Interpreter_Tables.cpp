@@ -1,6 +1,5 @@
 // Copyright 2008 Dolphin Emulator Project
-// Licensed under GPLv2+
-// Refer to the license.txt file included.
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <array>
 
@@ -32,7 +31,7 @@ static std::array<GekkoOPTemplate, 54> primarytable =
 	{16, Interpreter::bcx,          {"bcx", OpType::Branch, FL_ENDBLOCK, 1, 0, 0, 0}},
 	{18, Interpreter::bx,           {"bx",  OpType::Branch, FL_ENDBLOCK, 1, 0, 0, 0}},
 
-	{3,  Interpreter::twi,          {"twi", OpType::System, FL_ENDBLOCK, 1, 0, 0, 0}},
+	{3,  Interpreter::twi,          {"twi", OpType::System, FL_IN_A | FL_ENDBLOCK, 1, 0, 0, 0}},
 	{17, Interpreter::sc,           {"sc",  OpType::System, FL_ENDBLOCK, 2, 0, 0, 0}},
 
 	{7,  Interpreter::mulli,        {"mulli",    OpType::Integer, FL_OUT_D | FL_IN_A, 3, 0, 0, 0}},

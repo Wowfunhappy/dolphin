@@ -1,6 +1,5 @@
 // Copyright 2020 Dolphin Emulator Project
-// Licensed under GPLv2+
-// Refer to the license.txt file included.
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "DolphinQt/ConvertDialog.h"
 
@@ -330,6 +329,21 @@ void ConvertDialog::Convert()
     }
   }
 
+  if (std::any_of(m_files.begin(), m_files.end(), std::mem_fn(&UICommon::GameFile::IsNKit)))
+  {
+    if (!ShowAreYouSureDialog(
+            tr("Dolphin can't convert NKit files to non-NKit files. Converting an NKit file in "
+               "Dolphin will result in another NKit file.\n"
+               "\n"
+               "If you want to convert an NKit file to a non-NKit file, you can use the same "
+               "program as you originally used when converting the file to the NKit format.\n"
+               "\n"
+               "Do you want to continue anyway?")))
+    {
+      return;
+    }
+  }
+
   QString extension;
   QString filter;
   switch (format)
@@ -413,9 +427,9 @@ void ConvertDialog::Convert()
 
     if (m_files.size() > 1)
     {
+      // i18n: %1 is a filename.
       progress_dialog.GetRaw()->setLabelText(
-          tr("Converting...") + QLatin1Char{'\n'} +
-          QFileInfo(QString::fromStdString(original_path)).fileName());
+          tr("Converting...\n%1").arg(QFileInfo(QString::fromStdString(original_path)).fileName()));
     }
 
     std::unique_ptr<DiscIO::BlobReader> blob_reader;

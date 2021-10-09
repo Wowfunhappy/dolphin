@@ -1,6 +1,5 @@
 // Copyright 2018 Dolphin Emulator Project
-// Licensed under GPLv2+
-// Refer to the license.txt file included.
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #pragma once
 
@@ -57,5 +56,17 @@ jmethodID GetNetworkHelperGetNetworkPrefixLength();
 jmethodID GetNetworkHelperGetNetworkGateway();
 
 jmethodID GetBooleanSupplierGet();
+
+jclass GetARCheatClass();
+jfieldID GetARCheatPointer();
+jmethodID GetARCheatConstructor();
+
+jclass GetGeckoCheatClass();
+jfieldID GetGeckoCheatPointer();
+jmethodID GetGeckoCheatConstructor();
+
+jclass GetPatchCheatClass();
+jfieldID GetPatchCheatPointer();
+jmethodID GetPatchCheatConstructor();
 
 }  // namespace IDCache

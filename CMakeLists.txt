@@ -8,9 +8,9 @@ cmake_minimum_required(VERSION 3.10)
 
 # MacOS prior to 10.14 did not support aligned alloc which is used to implement
 # std::unique_ptr in the arm64 C++ standard library. x86_64 builds can override
-# this to 10.12.0 using -DCMAKE_OSX_DEPLOYMENT_TARGET="10.12.0" without issue.
+# this to 10.13.0 using -DCMAKE_OSX_DEPLOYMENT_TARGET="10.13.0" without issue.
 # This is done in the universal binary building script to build a binary that 
-# runs on 10.12 on x86_64 computers, while still containing an arm64 slice.
+# runs on 10.13 on x86_64 computers, while still containing an arm64 slice.
 
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.9.5" CACHE STRING "")
 include_directories(/opt/local/include/LegacySupport)
@@ -46,6 +46,7 @@ option(ENABLE_LLVM "Enables LLVM support, for disassembly" ON)
 option(ENABLE_TESTS "Enables building the unit tests" ON)
 option(ENABLE_VULKAN "Enables vulkan video backend" ON)
 option(USE_DISCORD_PRESENCE "Enables Discord Rich Presence, show the current game on Discord" ON)
+option(USE_MGBA "Enables GBA controllers emulation using libmgba" ON)
 
 # Maintainers: if you consider blanket disabling this for your users, please
 # consider the following points:
@@ -488,8 +489,14 @@ if(ENCODE_FRAMEDUMPS)
   if(WIN32 AND _M_X86_64)
     set(FFMPEG_DIR Externals/ffmpeg)
   endif()
-  find_package(FFmpeg COMPONENTS avcodec avformat avutil swscale)
+  find_package(FFmpeg COMPONENTS avcodec avformat avutil swresample swscale)
   if(FFmpeg_FOUND)
+    if(APPLE) 
+      find_library(COREMEDIA_LIBRARY CoreMedia)
+      find_library(VIDEOTOOLBOX_LIBRARY VideoToolbox)
+      find_library(COREVIDEO_LIBRARY CoreVideo)
+      find_library(AUDIOTOOLBOX_LIBRARY AudioToolbox)
+    endif()
     message(STATUS "libav/ffmpeg found, enabling AVI frame dumps")
     add_definitions(-DHAVE_FFMPEG)
   else()
@@ -825,6 +832,14 @@ if(USE_DISCORD_PRESENCE)
   message(STATUS "Using static DiscordRPC from Externals")
   add_subdirectory(Externals/discord-rpc EXCLUDE_FROM_ALL)
   include_directories(Externals/discord-rpc/include)
+endif()
+
+if(NOT ENABLE_QT)
+  set(USE_MGBA 0)
+endif()
+if(USE_MGBA)
+  message(STATUS "Using static libmgba from Externals")
+  add_subdirectory(Externals/mGBA)
 endif()
 
 find_package(SYSTEMD)

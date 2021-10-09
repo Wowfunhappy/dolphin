@@ -1,6 +1,5 @@
 // Copyright 2009 Dolphin Emulator Project
-// Licensed under GPLv2+
-// Refer to the license.txt file included.
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "VideoBackends/Software/Tev.h"
 
@@ -12,9 +11,9 @@
 #include "Common/CommonTypes.h"
 #include "VideoBackends/Software/DebugUtil.h"
 #include "VideoBackends/Software/EfbInterface.h"
+#include "VideoBackends/Software/SWBoundingBox.h"
 #include "VideoBackends/Software/TextureSampler.h"
 
-#include "VideoCommon/BoundingBox.h"
 #include "VideoCommon/PerfQueryBase.h"
 #include "VideoCommon/PixelShaderManager.h"
 #include "VideoCommon/Statistics.h"
@@ -460,22 +459,22 @@ void Tev::Indirect(unsigned int stageNum, s32 s, s32 t)
     AlphaBump = AlphaBump & 0xf8;
     break;
   case IndTexFormat::ITF_5:
-    indcoord[0] = (indmap[TextureSampler::ALP_SMP] & 0x1f) + bias[0];
-    indcoord[1] = (indmap[TextureSampler::BLU_SMP] & 0x1f) + bias[1];
-    indcoord[2] = (indmap[TextureSampler::GRN_SMP] & 0x1f) + bias[2];
-    AlphaBump = AlphaBump & 0xe0;
+    indcoord[0] = (indmap[TextureSampler::ALP_SMP] >> 3) + bias[0];
+    indcoord[1] = (indmap[TextureSampler::BLU_SMP] >> 3) + bias[1];
+    indcoord[2] = (indmap[TextureSampler::GRN_SMP] >> 3) + bias[2];
+    AlphaBump = AlphaBump << 5;
     break;
   case IndTexFormat::ITF_4:
-    indcoord[0] = (indmap[TextureSampler::ALP_SMP] & 0x0f) + bias[0];
-    indcoord[1] = (indmap[TextureSampler::BLU_SMP] & 0x0f) + bias[1];
-    indcoord[2] = (indmap[TextureSampler::GRN_SMP] & 0x0f) + bias[2];
-    AlphaBump = AlphaBump & 0xf0;
+    indcoord[0] = (indmap[TextureSampler::ALP_SMP] >> 4) + bias[0];
+    indcoord[1] = (indmap[TextureSampler::BLU_SMP] >> 4) + bias[1];
+    indcoord[2] = (indmap[TextureSampler::GRN_SMP] >> 4) + bias[2];
+    AlphaBump = AlphaBump << 4;
     break;
   case IndTexFormat::ITF_3:
-    indcoord[0] = (indmap[TextureSampler::ALP_SMP] & 0x07) + bias[0];
-    indcoord[1] = (indmap[TextureSampler::BLU_SMP] & 0x07) + bias[1];
-    indcoord[2] = (indmap[TextureSampler::GRN_SMP] & 0x07) + bias[2];
-    AlphaBump = AlphaBump & 0xf8;
+    indcoord[0] = (indmap[TextureSampler::ALP_SMP] >> 5) + bias[0];
+    indcoord[1] = (indmap[TextureSampler::BLU_SMP] >> 5) + bias[1];
+    indcoord[2] = (indmap[TextureSampler::GRN_SMP] >> 5) + bias[2];
+    AlphaBump = AlphaBump << 3;
     break;
   default:
     PanicAlertFmt("Invalid indirect format {}", indirect.fmt);
@@ -840,7 +839,7 @@ void Tev::Draw()
 
   // The GC/Wii GPU rasterizes in 2x2 pixel groups, so bounding box values will be rounded to the
   // extents of these groups, rather than the exact pixel.
-  BoundingBox::Update(static_cast<u16>(Position[0] & ~1), static_cast<u16>(Position[0] | 1),
+  BBoxManager::Update(static_cast<u16>(Position[0] & ~1), static_cast<u16>(Position[0] | 1),
                       static_cast<u16>(Position[1] & ~1), static_cast<u16>(Position[1] | 1));
 
 #if ALLOW_TEV_DUMPS

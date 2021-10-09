@@ -1,6 +1,5 @@
 // Copyright 2015 Dolphin Emulator Project
-// Licensed under GPLv2+
-// Refer to the license.txt file included.
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #ifdef _WIN32
 #include <QCoreApplication>
@@ -1031,7 +1030,9 @@ void GameList::OnHeaderViewChanged()
 
 void GameList::NewTag()
 {
-  auto tag = QInputDialog::getText(this, tr("New tag"), tr("Name for a new tag:"));
+  const auto tag =
+      QInputDialog::getText(this, tr("New tag"), tr("Name for a new tag:"), QLineEdit::Normal,
+                            QString{}, nullptr, Qt::WindowCloseButtonHint);
 
   if (tag.isEmpty())
     return;
@@ -1041,7 +1042,9 @@ void GameList::NewTag()
 
 void GameList::DeleteTag()
 {
-  auto tag = QInputDialog::getText(this, tr("Remove tag"), tr("Name of the tag to remove:"));
+  const auto tag =
+      QInputDialog::getText(this, tr("Remove tag"), tr("Name of the tag to remove:"),
+                            QLineEdit::Normal, QString{}, nullptr, Qt::WindowCloseButtonHint);
 
   if (tag.isEmpty())
     return;

@@ -1,6 +1,5 @@
 // Copyright 2014 Dolphin Emulator Project
-// Licensed under GPLv2+
-// Refer to the license.txt file included.
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <cinttypes>
 #include <cstddef>
@@ -15,6 +14,7 @@
 
 #include "Core/HW/Memmap.h"
 #include "Core/PowerPC/JitArm64/Jit.h"
+#include "Core/PowerPC/JitArm64/Jit_Util.h"
 #include "Core/PowerPC/JitArmCommon/BackPatch.h"
 #include "Core/PowerPC/MMU.h"
 #include "Core/PowerPC/PowerPC.h"
@@ -92,24 +92,22 @@ void JitArm64::EmitBackpatchRoutine(u32 flags, bool fastmem, bool do_farcode, AR
     else if (flags & BackPatchInfo::FLAG_STORE)
     {
       ARM64Reg temp = ARM64Reg::W0;
-      if (flags & BackPatchInfo::FLAG_SIZE_32)
-        REV32(temp, RS);
-      else if (flags & BackPatchInfo::FLAG_SIZE_16)
-        REV16(temp, RS);
+      temp = ByteswapBeforeStore(this, temp, RS, flags, true);
 
       if (flags & BackPatchInfo::FLAG_SIZE_32)
         STR(temp, MEM_REG, addr);
       else if (flags & BackPatchInfo::FLAG_SIZE_16)
         STRH(temp, MEM_REG, addr);
       else
-        STRB(RS, MEM_REG, addr);
+        STRB(temp, MEM_REG, addr);
     }
     else if (flags & BackPatchInfo::FLAG_ZERO_256)
     {
       // This literally only stores 32bytes of zeros to the target address
-      ADD(addr, addr, MEM_REG);
-      STP(IndexType::Signed, ARM64Reg::ZR, ARM64Reg::ZR, addr, 0);
-      STP(IndexType::Signed, ARM64Reg::ZR, ARM64Reg::ZR, addr, 16);
+      ARM64Reg temp = ARM64Reg::X30;
+      ADD(temp, addr, MEM_REG);
+      STP(IndexType::Signed, ARM64Reg::ZR, ARM64Reg::ZR, temp, 0);
+      STP(IndexType::Signed, ARM64Reg::ZR, ARM64Reg::ZR, temp, 16);
     }
     else
     {
@@ -120,16 +118,7 @@ void JitArm64::EmitBackpatchRoutine(u32 flags, bool fastmem, bool do_farcode, AR
       else if (flags & BackPatchInfo::FLAG_SIZE_8)
         LDRB(RS, MEM_REG, addr);
 
-      if (!(flags & BackPatchInfo::FLAG_REVERSE))
-      {
-        if (flags & BackPatchInfo::FLAG_SIZE_32)
-          REV32(RS, RS);
-        else if (flags & BackPatchInfo::FLAG_SIZE_16)
-          REV16(RS, RS);
-      }
-
-      if (flags & BackPatchInfo::FLAG_EXTEND)
-        SXTH(RS, RS);
+      ByteswapAfterLoad(this, RS, RS, flags, true, false);
     }
   }
   const u8* fastmem_end = GetCodePtr();
@@ -145,7 +134,7 @@ void JitArm64::EmitBackpatchRoutine(u32 flags, bool fastmem, bool do_farcode, AR
       handler.fprs = fprs_to_push;
       handler.flags = flags;
 
-      FastmemArea* fastmem_area = &m_fault_to_handler[fastmem_start];
+      FastmemArea* fastmem_area = &m_fault_to_handler[fastmem_end];
       auto handler_loc_iter = m_handler_to_loc.find(handler);
 
       if (handler_loc_iter == m_handler_to_loc.end())
@@ -154,14 +143,14 @@ void JitArm64::EmitBackpatchRoutine(u32 flags, bool fastmem, bool do_farcode, AR
         SwitchToFarCode();
         const u8* handler_loc = GetCodePtr();
         m_handler_to_loc[handler] = handler_loc;
+        fastmem_area->fastmem_code = fastmem_start;
         fastmem_area->slowmem_code = handler_loc;
-        fastmem_area->length = fastmem_end - fastmem_start;
       }
       else
       {
         const u8* handler_loc = handler_loc_iter->second;
+        fastmem_area->fastmem_code = fastmem_start;
         fastmem_area->slowmem_code = handler_loc;
-        fastmem_area->length = fastmem_end - fastmem_start;
         return;
       }
     }
@@ -210,10 +199,12 @@ void JitArm64::EmitBackpatchRoutine(u32 flags, bool fastmem, bool do_farcode, AR
     {
       MOV(ARM64Reg::W0, RS);
 
+      const bool reverse = (flags & BackPatchInfo::FLAG_REVERSE) != 0;
+
       if (flags & BackPatchInfo::FLAG_SIZE_32)
-        MOVP2R(ARM64Reg::X8, &PowerPC::Write_U32);
+        MOVP2R(ARM64Reg::X8, reverse ? &PowerPC::Write_U32_Swap : &PowerPC::Write_U32);
       else if (flags & BackPatchInfo::FLAG_SIZE_16)
-        MOVP2R(ARM64Reg::X8, &PowerPC::Write_U16);
+        MOVP2R(ARM64Reg::X8, reverse ? &PowerPC::Write_U16_Swap : &PowerPC::Write_U16);
       else
         MOVP2R(ARM64Reg::X8, &PowerPC::Write_U8);
 
@@ -235,20 +226,7 @@ void JitArm64::EmitBackpatchRoutine(u32 flags, bool fastmem, bool do_farcode, AR
 
       BLR(ARM64Reg::X8);
 
-      if (!(flags & BackPatchInfo::FLAG_REVERSE))
-      {
-        MOV(RS, ARM64Reg::W0);
-      }
-      else
-      {
-        if (flags & BackPatchInfo::FLAG_SIZE_32)
-          REV32(RS, ARM64Reg::W0);
-        else if (flags & BackPatchInfo::FLAG_SIZE_16)
-          REV16(RS, ARM64Reg::W0);
-      }
-
-      if (flags & BackPatchInfo::FLAG_EXTEND)
-        SXTH(RS, RS);
+      ByteswapAfterLoad(this, RS, ARM64Reg::W0, flags, false, false);
     }
 
     m_float_emit.ABI_PopRegisters(fprs_to_push, ARM64Reg::X30);
@@ -275,33 +253,32 @@ bool JitArm64::HandleFastmemFault(uintptr_t access_address, SContext* ctx)
     return false;
   }
 
-  auto slow_handler_iter = m_fault_to_handler.upper_bound((const u8*)ctx->CTX_PC);
-  slow_handler_iter--;
+  const u8* pc = reinterpret_cast<const u8*>(ctx->CTX_PC);
+  auto slow_handler_iter = m_fault_to_handler.upper_bound(pc);
 
   // no fastmem area found
   if (slow_handler_iter == m_fault_to_handler.end())
     return false;
 
-  const u8* fault_location = slow_handler_iter->first;
-  const u32 fastmem_area_length = slow_handler_iter->second.length;
+  const u8* fastmem_area_start = slow_handler_iter->second.fastmem_code;
+  const u8* fastmem_area_end = slow_handler_iter->first;
 
   // no overlapping fastmem area found
-  if ((const u8*)ctx->CTX_PC - fault_location > fastmem_area_length)
+  if (pc < fastmem_area_start)
     return false;
 
   const Common::ScopedJITPageWriteAndNoExecute enable_jit_page_writes;
-  ARM64XEmitter emitter((u8*)fault_location);
+  ARM64XEmitter emitter(const_cast<u8*>(fastmem_area_start));
 
   emitter.BL(slow_handler_iter->second.slowmem_code);
 
-  const u32 num_insts_max = fastmem_area_length / 4 - 1;
-  for (u32 i = 0; i < num_insts_max; ++i)
+  while (emitter.GetCodePtr() < fastmem_area_end)
     emitter.NOP();
 
   m_fault_to_handler.erase(slow_handler_iter);
 
   emitter.FlushIcache();
 
-  ctx->CTX_PC = reinterpret_cast<std::uintptr_t>(fault_location);
+  ctx->CTX_PC = reinterpret_cast<std::uintptr_t>(fastmem_area_start);
   return true;
 }

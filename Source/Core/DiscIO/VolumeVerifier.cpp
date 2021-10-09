@@ -1,6 +1,5 @@
 // Copyright 2019 Dolphin Emulator Project
-// Licensed under GPLv2+
-// Refer to the license.txt file included.
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "DiscIO/VolumeVerifier.h"
 
@@ -631,14 +630,17 @@ bool VolumeVerifier::CheckPartition(const Partition& partition)
     // IOS9 is the only IOS which can be assumed to exist in a working state on any Wii
     // regardless of what updates have been installed. At least Mario Party 8
     // (RM8E01, revision 2) uses IOS9 without having it in its update partition.
-    bool has_correct_ios = tmd.IsValid() && (tmd.GetIOSId() & 0xFF) == 9;
+    const u64 ios_ver = tmd.GetIOSId() & 0xFF;
+    bool has_correct_ios = tmd.IsValid() && ios_ver == 9;
 
     if (!has_correct_ios && tmd.IsValid())
     {
       std::unique_ptr<FileInfo> file_info = filesystem->FindFileInfo("_sys");
       if (file_info)
       {
-        const std::string correct_ios = "IOS" + std::to_string(tmd.GetIOSId() & 0xFF) + "-";
+        const std::string ios_ver_str = std::to_string(ios_ver);
+        const std::string correct_ios =
+            IsDebugSigned() ? ("firmware.64." + ios_ver_str + ".") : ("IOS" + ios_ver_str + "-");
         for (const FileInfo& f : *file_info)
         {
           if (StringBeginsWith(f.GetName(), correct_ios))
@@ -971,7 +973,11 @@ void VolumeVerifier::CheckMisc()
         es->VerifyContainer(IOS::HLE::ESDevice::VerifyContainerType::TMD,
                             IOS::HLE::ESDevice::VerifyMode::DoNotUpdateCertStore, tmd, cert_chain))
     {
-      AddProblem(Severity::Low, Common::GetStringT("The TMD is not correctly signed."));
+      AddProblem(
+          Severity::Medium,
+          Common::GetStringT("The TMD is not correctly signed. If you move or copy this title to "
+                             "the SD Card, the Wii System Menu will not launch it anymore and will "
+                             "also refuse to copy or move it back to the NAND."));
     }
   }
 

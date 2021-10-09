@@ -1,6 +1,5 @@
 // Copyright 2017 Dolphin Emulator Project
-// Licensed under GPLv2+
-// Refer to the license.txt file included.
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "DolphinQt/Settings/AudioPane.h"
 
@@ -10,6 +9,7 @@
 #include <QFormLayout>
 #include <QGridLayout>
 #include <QGroupBox>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QRadioButton>
 #include <QSlider>
@@ -48,9 +48,9 @@ void AudioPane::CreateWidgets()
   auto* dsp_layout = new QVBoxLayout;
 
   dsp_box->setLayout(dsp_layout);
-  m_dsp_hle = new QRadioButton(tr("DSP HLE (fast)"));
-  m_dsp_lle = new QRadioButton(tr("DSP LLE Recompiler"));
-  m_dsp_interpreter = new QRadioButton(tr("DSP LLE Interpreter (slow)"));
+  m_dsp_hle = new QRadioButton(tr("DSP HLE (recommended)"));
+  m_dsp_lle = new QRadioButton(tr("DSP LLE Recompiler (slow)"));
+  m_dsp_interpreter = new QRadioButton(tr("DSP LLE Interpreter (very slow)"));
 
   dsp_layout->addStretch(1);
   dsp_layout->addWidget(m_dsp_hle);
@@ -87,8 +87,9 @@ void AudioPane::CreateWidgets()
     m_latency_spin = new QSpinBox();
     m_latency_spin->setMinimum(0);
     m_latency_spin->setMaximum(200);
-    m_latency_spin->setToolTip(tr("Sets the latency (in ms). Higher values may reduce audio "
-                                  "crackling. Certain backends only."));
+    m_latency_spin->setToolTip(
+        tr("Sets the latency in milliseconds. Higher values may reduce audio "
+           "crackling. Certain backends only."));
   }
 
   m_dolby_pro_logic->setToolTip(
@@ -155,18 +156,19 @@ void AudioPane::CreateWidgets()
   stretching_layout->addWidget(m_stretching_buffer_slider, 1, 1);
   stretching_layout->addWidget(m_stretching_buffer_indicator, 1, 2);
 
-  m_main_layout = new QGridLayout;
-
-  m_main_layout->setRowStretch(0, 0);
-
   dsp_box->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
-  m_main_layout->addWidget(dsp_box, 0, 0);
-  m_main_layout->addWidget(volume_box, 0, 1, -1, 1);
-  m_main_layout->addWidget(backend_box, 1, 0);
-  m_main_layout->addWidget(stretching_box, 2, 0);
+  auto* const main_vbox_layout = new QVBoxLayout;
+  main_vbox_layout->addWidget(dsp_box);
+  main_vbox_layout->addWidget(backend_box);
+  main_vbox_layout->addWidget(stretching_box);
+
+  m_main_layout = new QHBoxLayout;
+  m_main_layout->addLayout(main_vbox_layout);
+  m_main_layout->addWidget(volume_box);
 
   setLayout(m_main_layout);
+  setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 }
 
 void AudioPane::ConnectWidgets()
@@ -400,7 +402,7 @@ void AudioPane::OnEmulationStateChanged(bool running)
 void AudioPane::OnVolumeChanged(int volume)
 {
   m_volume_slider->setValue(volume);
-  m_volume_indicator->setText(tr("%1 %").arg(volume));
+  m_volume_indicator->setText(tr("%1%").arg(volume));
 }
 
 void AudioPane::CheckNeedForLatencyControl()
@@ -430,13 +432,13 @@ QString AudioPane::GetDPL2ApproximateLatencyLabel(AudioCommon::DPL2Quality value
   switch (value)
   {
   case AudioCommon::DPL2Quality::Lowest:
-    return tr("Latency: ~10ms");
+    return tr("Latency: ~10 ms");
   case AudioCommon::DPL2Quality::Low:
-    return tr("Latency: ~20ms");
+    return tr("Latency: ~20 ms");
   case AudioCommon::DPL2Quality::Highest:
-    return tr("Latency: ~80ms");
+    return tr("Latency: ~80 ms");
   default:
-    return tr("Latency: ~40ms");
+    return tr("Latency: ~40 ms");
   }
 }
 

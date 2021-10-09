@@ -1,6 +1,5 @@
 // Copyright 2009 Dolphin Emulator Project
-// Licensed under GPLv2+
-// Refer to the license.txt file included.
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #pragma once
 
@@ -36,15 +35,13 @@ inline void SetFPException(UReg_FPSCR* fpscr, u32 mask)
   fpscr->VX = (fpscr->Hex & FPSCR_VX_ANY) != 0;
 }
 
-inline double ForceSingle(const UReg_FPSCR& fpscr, double value)
+inline float ForceSingle(const UReg_FPSCR& fpscr, double value)
 {
-  // convert to float...
-  float x = (float)value;
+  float x = static_cast<float>(value);
   if (!cpu_info.bFlushToZero && fpscr.NI)
   {
     x = Common::FlushToZero(x);
   }
-  // ...and back to double:
   return x;
 }
 
@@ -315,37 +312,39 @@ inline FPResult NI_msub(UReg_FPSCR* fpscr, double a, double c, double b)
 // used by stfsXX instructions and ps_rsqrte
 inline u32 ConvertToSingle(u64 x)
 {
-  u32 exp = (x >> 52) & 0x7ff;
+  const u32 exp = u32((x >> 52) & 0x7ff);
+
   if (exp > 896 || (x & ~Common::DOUBLE_SIGN) == 0)
   {
-    return ((x >> 32) & 0xc0000000) | ((x >> 29) & 0x3fffffff);
+    return u32(((x >> 32) & 0xc0000000) | ((x >> 29) & 0x3fffffff));
   }
   else if (exp >= 874)
   {
-    u32 t = (u32)(0x80000000 | ((x & Common::DOUBLE_FRAC) >> 21));
+    u32 t = u32(0x80000000 | ((x & Common::DOUBLE_FRAC) >> 21));
     t = t >> (905 - exp);
-    t |= (x >> 32) & 0x80000000;
+    t |= u32((x >> 32) & 0x80000000);
     return t;
   }
   else
   {
     // This is said to be undefined.
     // The code is based on hardware tests.
-    return ((x >> 32) & 0xc0000000) | ((x >> 29) & 0x3fffffff);
+    return u32(((x >> 32) & 0xc0000000) | ((x >> 29) & 0x3fffffff));
   }
 }
 
 // used by psq_stXX operations.
 inline u32 ConvertToSingleFTZ(u64 x)
 {
-  u32 exp = (x >> 52) & 0x7ff;
+  const u32 exp = u32((x >> 52) & 0x7ff);
+
   if (exp > 896 || (x & ~Common::DOUBLE_SIGN) == 0)
   {
-    return ((x >> 32) & 0xc0000000) | ((x >> 29) & 0x3fffffff);
+    return u32(((x >> 32) & 0xc0000000) | ((x >> 29) & 0x3fffffff));
   }
   else
   {
-    return (x >> 32) & 0x80000000;
+    return u32((x >> 32) & 0x80000000);
   }
 }
 

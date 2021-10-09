@@ -1,6 +1,5 @@
 // Copyright 2008 Dolphin Emulator Project
-// Licensed under GPLv2+
-// Refer to the license.txt file included.
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "VideoBackends/OGL/OGLRender.h"
 
@@ -487,17 +486,14 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
 
   if (m_main_gl_context->IsGLES())
   {
-    g_ogl_config.SupportedESPointSize =
-        GLExtensions::Supports("GL_OES_geometry_point_size") ?
-            1 :
-            GLExtensions::Supports("GL_EXT_geometry_point_size") ? 2 : 0;
-    g_ogl_config.SupportedESTextureBuffer = GLExtensions::Supports("VERSION_GLES_3_2") ?
-                                                EsTexbufType::TexbufCore :
-                                                GLExtensions::Supports("GL_OES_texture_buffer") ?
-                                                EsTexbufType::TexbufOes :
-                                                GLExtensions::Supports("GL_EXT_texture_buffer") ?
-                                                EsTexbufType::TexbufExt :
-                                                EsTexbufType::TexbufNone;
+    g_ogl_config.SupportedESPointSize = GLExtensions::Supports("GL_OES_geometry_point_size") ? 1 :
+                                        GLExtensions::Supports("GL_EXT_geometry_point_size") ? 2 :
+                                                                                               0;
+    g_ogl_config.SupportedESTextureBuffer =
+        GLExtensions::Supports("VERSION_GLES_3_2")      ? EsTexbufType::TexbufCore :
+        GLExtensions::Supports("GL_OES_texture_buffer") ? EsTexbufType::TexbufOes :
+        GLExtensions::Supports("GL_EXT_texture_buffer") ? EsTexbufType::TexbufExt :
+                                                          EsTexbufType::TexbufNone;
 
     supports_glsl_cache = true;
     g_ogl_config.bSupportsGLSync = true;
@@ -744,8 +740,7 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
     OSD::AddMessage(fmt::format("Your OpenGL driver does not support {}_buffer_storage.",
                                 m_main_gl_context->IsGLES() ? "EXT" : "ARB"),
                     60000);
-    OSD::AddMessage("This device's performance will be terrible.", 60000);
-    OSD::AddMessage("Please ask your device vendor for an updated OpenGL driver.", 60000);
+    OSD::AddMessage("This device's performance may be poor.", 60000);
   }
 
   WARN_LOG_FMT(VIDEO, "Missing OGL Extensions: {}{}{}{}{}{}{}{}{}{}{}{}{}{}",
@@ -812,9 +807,10 @@ void Renderer::Shutdown()
   glDeleteFramebuffers(1, &m_shared_read_framebuffer);
 }
 
-std::unique_ptr<AbstractTexture> Renderer::CreateTexture(const TextureConfig& config)
+std::unique_ptr<AbstractTexture> Renderer::CreateTexture(const TextureConfig& config,
+                                                         std::string_view name)
 {
-  return std::make_unique<OGLTexture>(config);
+  return std::make_unique<OGLTexture>(config, name);
 }
 
 std::unique_ptr<AbstractStagingTexture> Renderer::CreateStagingTexture(StagingTextureType type,
@@ -830,14 +826,15 @@ std::unique_ptr<AbstractFramebuffer> Renderer::CreateFramebuffer(AbstractTexture
                                 static_cast<OGLTexture*>(depth_attachment));
 }
 
-std::unique_ptr<AbstractShader> Renderer::CreateShaderFromSource(ShaderStage stage,
-                                                                 std::string_view source)
+std::unique_ptr<AbstractShader>
+Renderer::CreateShaderFromSource(ShaderStage stage, std::string_view source, std::string_view name)
 {
-  return OGLShader::CreateFromSource(stage, source);
+  return OGLShader::CreateFromSource(stage, source, name);
 }
 
-std::unique_ptr<AbstractShader> Renderer::CreateShaderFromBinary(ShaderStage stage,
-                                                                 const void* data, size_t length)
+std::unique_ptr<AbstractShader>
+Renderer::CreateShaderFromBinary(ShaderStage stage, const void* data, size_t length,
+                                 [[maybe_unused]] std::string_view name)
 {
   return nullptr;
 }
@@ -854,19 +851,9 @@ void Renderer::SetScissorRect(const MathUtil::Rectangle<int>& rc)
   glScissor(rc.left, rc.top, rc.GetWidth(), rc.GetHeight());
 }
 
-u16 Renderer::BBoxReadImpl(int index)
+std::unique_ptr<::BoundingBox> Renderer::CreateBoundingBox() const
 {
-  return static_cast<u16>(BoundingBox::Get(index));
-}
-
-void Renderer::BBoxWriteImpl(int index, u16 value)
-{
-  BoundingBox::Set(index, value);
-}
-
-void Renderer::BBoxFlushImpl()
-{
-  BoundingBox::Flush();
+  return std::make_unique<OGLBoundingBox>();
 }
 
 void Renderer::SetViewport(float x, float y, float width, float height, float near_depth,

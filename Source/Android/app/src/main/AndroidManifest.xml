@@ -74,7 +74,13 @@
             android:exported="false"
             android:configChanges="orientation|screenSize"
             android:theme="@style/DolphinSettingsBase"
-            android:label="@string/preferences_settings"/>
+            android:label="@string/settings"/>
+
+        <activity
+            android:name=".features.cheats.ui.CheatsActivity"
+            android:exported="false"
+            android:theme="@style/DolphinSettingsBase"
+            android:label="@string/cheats"/>
 
         <activity
             android:name=".activities.EmulationActivity"

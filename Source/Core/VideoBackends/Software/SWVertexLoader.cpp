@@ -1,6 +1,5 @@
 // Copyright 2009 Dolphin Emulator Project
-// Licensed under GPLv2+
-// Refer to the license.txt file included.
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "VideoBackends/Software/SWVertexLoader.h"
 
@@ -53,6 +52,10 @@ void SWVertexLoader::DrawCurrentBatch(u32 base_index, u32 num_indices, u32 base_
     primitiveType = OpcodeDecoder::GX_DRAW_TRIANGLE_STRIP;
     break;
   }
+
+  // Flush bounding box here because software overrides the base function
+  if (g_renderer->IsBBoxEnabled())
+    g_renderer->BBoxFlush();
 
   m_setup_unit.Init(primitiveType);
 

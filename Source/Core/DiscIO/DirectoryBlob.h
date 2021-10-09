@@ -1,6 +1,5 @@
 // Copyright 2008 Dolphin Emulator Project
-// Licensed under GPLv2+
-// Refer to the license.txt file included.
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #pragma once
 
@@ -59,8 +58,8 @@ public:
   bool operator!=(const DiscContent& other) const { return !(*this == other); }
   bool operator<(const DiscContent& other) const { return GetEndOffset() < other.GetEndOffset(); }
   bool operator>(const DiscContent& other) const { return other < *this; }
-  bool operator<=(const DiscContent& other) const { return !(*this < other); }
-  bool operator>=(const DiscContent& other) const { return !(*this > other); }
+  bool operator<=(const DiscContent& other) const { return !(*this > other); }
+  bool operator>=(const DiscContent& other) const { return !(*this < other); }
 
 private:
   u64 m_offset;

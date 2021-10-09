@@ -1,6 +1,5 @@
 // Copyright 2016 Dolphin Emulator Project
-// Licensed under GPLv2+
-// Refer to the license.txt file included.
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
 #include <atomic>
@@ -20,8 +19,12 @@ namespace Config
     static std::atomic<u64> s_config_version = 0;
     
     Layers* GetLayers()
+{
     {
         return &s_layers;
+
+    const Config::LayerType layer_type = layer->GetLayer();
+    s_layers.insert_or_assign(layer_type, std::move(layer));
     }
     
     void AddLayer(std::unique_ptr<Layer> layer)
@@ -49,6 +52,7 @@ namespace Config
     void RemoveLayer(LayerType layer)
     {
         s_layers.erase(layer);
+  }
         OnConfigChanged();
     }
     bool LayerExists(LayerType layer)
@@ -112,6 +116,9 @@ namespace Config
         {System::Main, "Dolphin"},          {System::GCPad, "GCPad"},    {System::WiiPad, "Wiimote"},
         {System::GCKeyboard, "GCKeyboard"}, {System::GFX, "Graphics"},   {System::Logger, "Logger"},
         {System::Debugger, "Debugger"},     {System::SYSCONF, "SYSCONF"}};
+    {System::DualShockUDPClient, "DualShockUDPClient"},
+    {System::FreeLook, "FreeLook"},
+    {System::Session, "Session"}};
     
     const std::string& GetSystemName(System system)
     {

@@ -1,8 +1,9 @@
 // Copyright 2015 Dolphin Emulator Project
-// Licensed under GPLv2+
-// Refer to the license.txt file included.
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "DolphinQt/Settings.h"
+
+#include <atomic>
 
 #include <QApplication>
 #include <QDir>
@@ -11,6 +12,15 @@
 #include <QFontDatabase>
 #include <QSize>
 #include <QWidget>
+
+#ifdef _WIN32
+#include <memory>
+
+#include <fmt/format.h>
+
+#include <QTabBar>
+#include <QToolButton>
+#endif
 
 #include "AudioCommon/AudioCommon.h"
 
@@ -42,8 +52,21 @@ Settings::Settings()
     QueueOnObject(this, [this, new_state] { emit EmulationStateChanged(new_state); });
   });
 
-  Config::AddConfigChangedCallback(
-      [this] { QueueOnObject(this, [this] { emit ConfigChanged(); }); });
+  Config::AddConfigChangedCallback([this] {
+    static std::atomic<bool> do_once{true};
+    if (do_once.exchange(false))
+    {
+      // Calling ConfigChanged() with a "delay" can have risks, for example, if from
+      // code we change some configs that result in Qt greying out some setting, we could
+      // end up editing that setting before its greyed out, sending out an event,
+      // which might not be expected or handled by the code, potentially crashing.
+      // The only safe option would be to wait on the Qt thread to have finished executing this.
+      QueueOnObject(this, [this] {
+        do_once = true;
+        emit ConfigChanged();
+      });
+    }
+  });
 
   g_controller_interface.RegisterDevicesChangedCallback([this] {
     if (Host::GetInstance()->IsHostThread())
@@ -132,6 +155,22 @@ void Settings::SetCurrentUserStyle(const QString& stylesheet_name)
             .arg(border_color.rgba(), 0, 16);
     stylesheet_contents.append(QStringLiteral("%1").arg(tooltip_stylesheet));
   }
+#ifdef _WIN32
+  // MSVC has a bug causing QTabBar scroll buttons to be partially transparent when they inherit any
+  // stylesheet (see https://bugreports.qt.io/browse/QTBUG-74187) which is triggered when setting
+  // qApp's stylesheet below. Setting the scroll buttons' color directly fixes the problem.
+
+  // Create a temporary QToolButton that's a child of a QTabBar in case that has different styling
+  // than a plain QToolButton.
+  const auto tab_bar = std::make_unique<QTabBar>();
+  auto* const tool_button = new QToolButton(tab_bar.get());
+
+  const QRgb background_color = tool_button->palette().color(QPalette::Button).rgba();
+
+  const std::string style_var =
+      fmt::format("QTabBar QToolButton {{ background-color: #{:08x}; }}", background_color);
+  stylesheet_contents.append(QString::fromStdString(style_var));
+#endif
 
   qApp->setStyleSheet(stylesheet_contents);
 
@@ -401,14 +440,14 @@ void Settings::ResetNetPlayServer(NetPlay::NetPlayServer* server)
 
 bool Settings::GetCheatsEnabled() const
 {
-  return SConfig::GetInstance().bEnableCheats;
+  return Config::Get(Config::MAIN_ENABLE_CHEATS);
 }
 
 void Settings::SetCheatsEnabled(bool enabled)
 {
-  if (SConfig::GetInstance().bEnableCheats != enabled)
+  if (Config::Get(Config::MAIN_ENABLE_CHEATS) != enabled)
   {
-    SConfig::GetInstance().bEnableCheats = enabled;
+    Config::SetBaseOrCurrent(Config::MAIN_ENABLE_CHEATS, enabled);
     emit EnableCheatsChanged(enabled);
   }
 }

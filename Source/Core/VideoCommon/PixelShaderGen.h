@@ -1,6 +1,5 @@
 // Copyright 2008 Dolphin Emulator Project
-// Licensed under GPLv2+
-// Refer to the license.txt file included.
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #pragma once
 
@@ -9,15 +8,16 @@
 #include "VideoCommon/ShaderGenCommon.h"
 
 enum class APIType;
-enum class AlphaTestResult;
-enum class SrcBlendFactor : u32;
-enum class DstBlendFactor : u32;
-enum class CompareMode : u32;
 enum class AlphaTestOp : u32;
-enum class RasColorChan : u32;
-enum class KonstSel : u32;
+enum class AlphaTestResult;
+enum class CompareMode : u32;
+enum class DstBlendFactor : u32;
 enum class FogProjection : u32;
 enum class FogType : u32;
+enum class KonstSel : u32;
+enum class RasColorChan : u32;
+enum class SrcBlendFactor : u32;
+enum class ZTexOp : u32;
 
 #pragma pack(1)
 struct pixel_shader_uid_data
@@ -41,7 +41,7 @@ struct pixel_shader_uid_data
 
   FogType fog_fsel : 3;
   u32 fog_RangeBaseEnabled : 1;
-  u32 ztex_op : 2;
+  ZTexOp ztex_op : 2;
   u32 per_pixel_depth : 1;
   u32 forced_early_z : 1;
   u32 early_ztest : 1;

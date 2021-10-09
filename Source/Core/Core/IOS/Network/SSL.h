@@ -1,6 +1,5 @@
 // Copyright 2011 Dolphin Emulator Project
-// Licensed under GPLv2+
-// Refer to the license.txt file included.
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #pragma once
 
@@ -19,8 +18,8 @@
 // clang-format on
 
 #include "Common/CommonTypes.h"
-#include "Core/IOS/IOS.h"
 #include "Core/IOS/Device.h"
+#include "Core/IOS/IOS.h"
 
 namespace IOS::HLE
 {

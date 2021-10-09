@@ -1,6 +1,5 @@
 // Copyright 2016 Dolphin Emulator Project
-// Licensed under GPLv2+
-// Refer to the license.txt file included.
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
 #include <cstddef>
@@ -18,6 +17,7 @@
 
 #include "VideoBackends/Vulkan/CommandBufferManager.h"
 #include "VideoBackends/Vulkan/ObjectCache.h"
+#include "VideoBackends/Vulkan/StagingBuffer.h"
 #include "VideoBackends/Vulkan/StateTracker.h"
 #include "VideoBackends/Vulkan/VKBoundingBox.h"
 #include "VideoBackends/Vulkan/VKPerfQuery.h"
@@ -64,13 +64,6 @@ bool Renderer::Initialize()
   if (!::Renderer::Initialize())
     return false;
 
-  m_bounding_box = std::make_unique<BoundingBox>();
-  if (!m_bounding_box->Initialize())
-  {
-    PanicAlertFmt("Failed to initialize bounding box.");
-    return false;
-  }
-
   // Various initialization routines will have executed commands on the command buffer.
   // Execute what we have done before beginning the first frame.
   ExecuteCommandBuffer(true, false);
@@ -83,9 +76,10 @@ void Renderer::Shutdown()
   m_swap_chain.reset();
 }
 
-std::unique_ptr<AbstractTexture> Renderer::CreateTexture(const TextureConfig& config)
+std::unique_ptr<AbstractTexture> Renderer::CreateTexture(const TextureConfig& config,
+                                                         std::string_view name)
 {
-  return VKTexture::Create(config);
+  return VKTexture::Create(config, name);
 }
 
 std::unique_ptr<AbstractStagingTexture> Renderer::CreateStagingTexture(StagingTextureType type,
@@ -94,16 +88,17 @@ std::unique_ptr<AbstractStagingTexture> Renderer::CreateStagingTexture(StagingTe
   return VKStagingTexture::Create(type, config);
 }
 
-std::unique_ptr<AbstractShader> Renderer::CreateShaderFromSource(ShaderStage stage,
-                                                                 std::string_view source)
+std::unique_ptr<AbstractShader>
+Renderer::CreateShaderFromSource(ShaderStage stage, std::string_view source, std::string_view name)
 {
-  return VKShader::CreateFromSource(stage, source);
+  return VKShader::CreateFromSource(stage, source, name);
 }
 
 std::unique_ptr<AbstractShader> Renderer::CreateShaderFromBinary(ShaderStage stage,
-                                                                 const void* data, size_t length)
+                                                                 const void* data, size_t length,
+                                                                 std::string_view name)
 {
-  return VKShader::CreateFromBinary(stage, data, length);
+  return VKShader::CreateFromBinary(stage, data, length, name);
 }
 
 std::unique_ptr<NativeVertexFormat>
@@ -131,20 +126,9 @@ void Renderer::SetPipeline(const AbstractPipeline* pipeline)
   StateTracker::GetInstance()->SetPipeline(static_cast<const VKPipeline*>(pipeline));
 }
 
-u16 Renderer::BBoxReadImpl(int index)
+std::unique_ptr<BoundingBox> Renderer::CreateBoundingBox() const
 {
-  return static_cast<u16>(m_bounding_box->Get(index));
-}
-
-void Renderer::BBoxWriteImpl(int index, u16 value)
-{
-  m_bounding_box->Set(index, value);
-}
-
-void Renderer::BBoxFlushImpl()
-{
-  m_bounding_box->Flush();
-  m_bounding_box->Invalidate();
+  return std::make_unique<VKBoundingBox>();
 }
 
 void Renderer::ClearScreen(const MathUtil::Rectangle<int>& rc, bool color_enable, bool alpha_enable,

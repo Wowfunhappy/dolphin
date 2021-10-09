@@ -1,9 +1,9 @@
 // Copyright 2009 Dolphin Emulator Project
-// Licensed under GPLv2+
-// Refer to the license.txt file included.
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "VideoCommon/BPStructs.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <string>
@@ -226,6 +226,8 @@ static void BPWritten(const BPCmd& bp)
     srcRect.right = bpmem.copyTexSrcXY.x + bpmem.copyTexSrcWH.x + 1;
     srcRect.bottom = bpmem.copyTexSrcXY.y + bpmem.copyTexSrcWH.y + 1;
 
+    const UPE_Copy PE_copy = bpmem.triggerEFBCopy;
+
     // Since the copy X and Y coordinates/sizes are 10-bit, the game can configure a copy region up
     // to 1024x1024. Hardware tests have found that the number of bytes written does not depend on
     // the configured stride, instead it is based on the size registers, writing beyond the length
@@ -238,29 +240,36 @@ static void BPWritten(const BPCmd& bp)
     // writing the junk data, we don't write anything to RAM at all for over-sized copies, and clamp
     // to the EFB borders for over-offset copies. The arcade virtual console games (e.g. 1942) are
     // known for configuring these out-of-range copies.
-    u32 copy_width = srcRect.GetWidth();
-    u32 copy_height = srcRect.GetHeight();
-    if (srcRect.right > EFB_WIDTH || srcRect.bottom > EFB_HEIGHT)
-    {
-      WARN_LOG_FMT(VIDEO, "Oversized EFB copy: {}x{} (offset {},{} stride {})", copy_width,
-                   copy_height, srcRect.left, srcRect.top, destStride);
 
-      // Adjust the copy size to fit within the EFB. So that we don't end up with a stretched image,
-      // instead of clamping the source rectangle, we reduce it by the over-sized amount.
-      if (copy_width > EFB_WIDTH)
+    if (u32(srcRect.right) > EFB_WIDTH || u32(srcRect.bottom) > EFB_HEIGHT)
+    {
+      WARN_LOG_FMT(VIDEO, "Oversized EFB copy: {}x{} (offset {},{} stride {})", srcRect.GetWidth(),
+                   srcRect.GetHeight(), srcRect.left, srcRect.top, destStride);
+
+      if (u32(srcRect.left) >= EFB_WIDTH || u32(srcRect.top) >= EFB_HEIGHT)
       {
-        srcRect.right -= copy_width - EFB_WIDTH;
-        copy_width = EFB_WIDTH;
+        // This is not a sane src rectangle, it doesn't touch any valid image data at all
+        // Just ignore it
+        // Apparently Mario Kart Wii in wifi mode can generate a deformed EFB copy of size 4x4
+        // at offset (328,1020)
+        if (PE_copy.copy_to_xfb == 1)
+        {
+          // Make sure we disable Bounding box to match the side effects of the non-failure path
+          g_renderer->BBoxDisable();
+        }
+
+        return;
       }
-      if (copy_height > EFB_HEIGHT)
-      {
-        srcRect.bottom -= copy_height - EFB_HEIGHT;
-        copy_height = EFB_HEIGHT;
-      }
+
+      // Clamp the copy region to fit within EFB. So that we don't end up with a stretched image.
+      srcRect.right = std::clamp<int>(srcRect.right, 0, EFB_WIDTH);
+      srcRect.bottom = std::clamp<int>(srcRect.bottom, 0, EFB_HEIGHT);
     }
 
+    const u32 copy_width = srcRect.GetWidth();
+    const u32 copy_height = srcRect.GetHeight();
+
     // Check if we are to copy from the EFB or draw to the XFB
-    const UPE_Copy PE_copy = bpmem.triggerEFBCopy;
     if (PE_copy.copy_to_xfb == 0)
     {
       // bpmem.zcontrol.pixel_format to PixelFormat::Z24 is when the game wants to copy from ZBuffer
@@ -278,7 +287,7 @@ static void BPWritten(const BPCmd& bp)
       // We should be able to get away with deactivating the current bbox tracking
       // here. Not sure if there's a better spot to put this.
       // the number of lines copied is determined by the y scale * source efb height
-      BoundingBox::Disable();
+      g_renderer->BBoxDisable();
 
       float yScale;
       if (PE_copy.scale_invert)
@@ -443,7 +452,7 @@ static void BPWritten(const BPCmd& bp)
   case BPMEM_CLEARBBOX2:
   {
     const u8 offset = bp.address & 2;
-    BoundingBox::Enable();
+    g_renderer->BBoxEnable();
 
     g_renderer->BBoxWrite(offset, bp.newvalue & 0x3ff);
     g_renderer->BBoxWrite(offset + 1, bp.newvalue >> 10);
@@ -765,35 +774,25 @@ std::pair<std::string, std::string> GetBPRegInfo(u8 cmd, u32 cmddata)
     // TODO: Description
 
   case BPMEM_IND_MTXA:  // 0x06
-  case BPMEM_IND_MTXB:  // 0x07
-  case BPMEM_IND_MTXC:  // 0x08
   case BPMEM_IND_MTXA + 3:
-  case BPMEM_IND_MTXB + 3:
-  case BPMEM_IND_MTXC + 3:
   case BPMEM_IND_MTXA + 6:
+    return std::make_pair(fmt::format("BPMEM_IND_MTXA Matrix {}", (cmd - BPMEM_IND_MTXA) / 3),
+                          fmt::format("Matrix {} column A\n{}", (cmd - BPMEM_IND_MTXA) / 3,
+                                      IND_MTXA{.hex = cmddata}));
+
+  case BPMEM_IND_MTXB:  // 0x07
+  case BPMEM_IND_MTXB + 3:
   case BPMEM_IND_MTXB + 6:
+    return std::make_pair(fmt::format("BPMEM_IND_MTXB Matrix {}", (cmd - BPMEM_IND_MTXB) / 3),
+                          fmt::format("Matrix {} column B\n{}", (cmd - BPMEM_IND_MTXB) / 3,
+                                      IND_MTXB{.hex = cmddata}));
+
+  case BPMEM_IND_MTXC:  // 0x08
+  case BPMEM_IND_MTXC + 3:
   case BPMEM_IND_MTXC + 6:
-  {
-    const u32 matrix_num = (cmd - BPMEM_IND_MTXA) / 3;
-    const u32 matrix_col = (cmd - BPMEM_IND_MTXA) % 3;
-    // These all use the same structure, though the meaning is *slightly* different;
-    // for conveninece implement it only once
-    const s32 row0 = cmddata & 0x0007ff;           // ma or mc or me
-    const s32 row1 = (cmddata & 0x3ff800) >> 11;   // mb or md or mf
-    const u32 scale = (cmddata & 0xc00000) >> 22;  // 2 bits of a 6-bit field for each column
-
-    const float row0f = static_cast<float>(row0) / (1 << 10);
-    const float row1f = static_cast<float>(row0) / (1 << 10);
-
-    return std::make_pair(fmt::format("BPMEM_IND_MTX{} Matrix {}", "ABC"[matrix_col], matrix_num),
-                          fmt::format("Matrix {} column {} ({})\n"
-                                      "Row 0 (m{}): {} ({})\n"
-                                      "Row 1 (m{}): {} ({})\n"
-                                      "Scale bits: {} (shifted: {})",
-                                      matrix_num, matrix_col, "ABC"[matrix_col], "ace"[matrix_col],
-                                      row0f, row0, "bdf"[matrix_col], row1f, row1, scale,
-                                      scale << (2 * matrix_col)));
-  }
+    return std::make_pair(fmt::format("BPMEM_IND_MTXC Matrix {}", (cmd - BPMEM_IND_MTXC) / 3),
+                          fmt::format("Matrix {} column C\n{}", (cmd - BPMEM_IND_MTXC) / 3,
+                                      IND_MTXC{.hex = cmddata}));
 
   case BPMEM_IND_IMASK:  // 0x0F
     return DescriptionlessReg(BPMEM_IND_IMASK);
