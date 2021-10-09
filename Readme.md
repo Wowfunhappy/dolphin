@@ -17,7 +17,7 @@ On Mavericks:
 
 1. Build and install patched QT 5.9: https://github.com/Wowfunhappy/qt5.9-base-mavericks
 2. sudo port install legacy-support clang-11 hidapi
-3. cmake -DCMAKE_C_COMPILER=/opt/local/bin/clang-mp-11 -DCMAKE_CXX_COMPILER=/opt/local/bin/clang++-mp-11 -DENABLE_VULKAN=OFF -DUSE_DISCORD_PRESENCE=OFF -DCMAKE_PREFIX_PATH=/usr/local/Qt-5.9.9/ ../dolphin/
+3. cmake -DCMAKE_C_COMPILER=/opt/local/bin/clang-mp-11 -DCMAKE_CXX_COMPILER=/opt/local/bin/clang++-mp-11 -DENABLE_VULKAN=OFF -DUSE_DISCORD_PRESENCE=OFF -DUSE_MGBA=OFF -DCMAKE_PREFIX_PATH=/usr/local/Qt-5.9.9/ ../dolphin/
 
 ----
 
