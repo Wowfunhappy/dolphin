@@ -180,7 +180,7 @@ int Interpreter::SingleStepInner()
   {
     if (IsInvalidPairedSingleExecution(m_prev_inst))
     {
-      GenerateProgramException();
+      GenerateProgramException(ProgramExceptionCause::IllegalInstruction);
       CheckExceptions();
     }
     else if (MSR.FP)
@@ -340,7 +340,7 @@ void Interpreter::unknown_instruction(UGeckoInstruction inst)
   const u32 opcode = PowerPC::HostRead_U32(last_pc);
   const std::string disasm = Common::GekkoDisassembler::Disassemble(opcode, last_pc);
   NOTICE_LOG_FMT(POWERPC, "Last PC = {:08x} : {}", last_pc, disasm);
-  Dolphin_Debugger::PrintCallstack();
+  Dolphin_Debugger::PrintCallstack(Common::Log::POWERPC, Common::Log::LNOTICE);
   NOTICE_LOG_FMT(
       POWERPC,
       "\nIntCPU: Unknown instruction {:08x} at PC = {:08x}  last_PC = {:08x}  LR = {:08x}\n",
