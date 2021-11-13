@@ -25,6 +25,8 @@ add_library(common
   Config/Layer.cpp
   Config/Layer.h
   CPUDetect.h
+  CRC32.cpp
+  CRC32.h
   Crypto/AES.cpp
   Crypto/AES.h
   Crypto/bn.cpp
@@ -42,6 +44,7 @@ add_library(common
   ENetUtil.cpp
   ENetUtil.h
   EnumFormatter.h
+  EnumMap.h
   Event.h
   FileSearch.cpp
   FileSearch.h

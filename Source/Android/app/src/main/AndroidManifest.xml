@@ -40,7 +40,8 @@
         android:fullBackupContent="@xml/backup_rules"
         android:supportsRtl="true"
         android:isGame="true"
-        android:banner="@drawable/banner_tv">
+        android:banner="@drawable/banner_tv"
+        android:hasFragileUserData="true">
         <meta-data
             android:name="android.max_aspect"
             android:value="2.1"/>
@@ -125,6 +126,11 @@
             android:exported="false"
             android:label="@string/user_data_submenu"
             android:theme="@style/DolphinSettingsBase" />
+
+        <activity
+            android:name=".features.riivolution.ui.RiivolutionBootActivity"
+            android:exported="false"
+            android:theme="@style/DolphinBase" />
 
         <service
             android:name=".utils.DirectoryInitialization"

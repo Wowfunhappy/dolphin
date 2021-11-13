@@ -73,6 +73,8 @@
 #include "Core/MemoryWatcher.h"
 #endif
 
+#include "DiscIO/RiivolutionPatcher.h"
+
 #include "InputCommon/ControlReference/ControlReference.h"
 #include "InputCommon/ControllerInterface/ControllerInterface.h"
 #include "InputCommon/GCAdapter.h"
@@ -603,6 +605,10 @@ static void EmuThread(std::unique_ptr<BootParameters> boot, WindowSystemInfo wsi
   else
     cpuThreadFunc = CpuThread;
 
+  std::optional<DiscIO::Riivolution::SavegameRedirect> savegame_redirect = std::nullopt;
+  if (SConfig::GetInstance().bWii)
+    savegame_redirect = DiscIO::Riivolution::ExtractSavegameRedirect(boot->riivolution_patches);
+
   if (!CBoot::BootUp(std::move(boot)))
     return;
 
@@ -611,7 +617,7 @@ static void EmuThread(std::unique_ptr<BootParameters> boot, WindowSystemInfo wsi
   // with the correct title context since save copying requires title directories to exist.
   Common::ScopeGuard wiifs_guard{&Core::CleanUpWiiFileSystemContents};
   if (SConfig::GetInstance().bWii)
-    Core::InitializeWiiFileSystemContents();
+    Core::InitializeWiiFileSystemContents(savegame_redirect);
   else
     wiifs_guard.Dismiss();
 
@@ -742,7 +748,7 @@ static std::string GenerateScreenshotName()
 
   const std::time_t cur_time = std::time(nullptr);
   const std::string base_name =
-      fmt::format("{}_{:%Y-%m-%d_%H-%M-%S}", path_prefix, *std::localtime(&cur_time));
+      fmt::format("{}_{:%Y-%m-%d_%H-%M-%S}", path_prefix, fmt::localtime(cur_time));
 
   // First try a filename without any suffixes, if already exists then append increasing numbers
   std::string name = fmt::format("{}.png", base_name);
