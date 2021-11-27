@@ -357,7 +357,8 @@ void NetPlayServer::ThreadFunc()
     ClearPeerPlayerId(player_entry.second.socket);
     enet_peer_disconnect(player_entry.second.socket, 0);
   }
-}  // namespace NetPlay
+  m_players.clear();
+}
 
 static void SendSyncIdentifier(sf::Packet& spac, const SyncIdentifier& sync_identifier)
 {
@@ -1818,7 +1819,7 @@ bool NetPlayServer::SyncSaveData()
     }
 
     // Set titles for host-side loading in WiiRoot
-    SetWiiSyncData(nullptr, titles);
+    m_dialog->SetHostWiiSyncTitles(std::move(titles));
 
     SendChunkedToClients(std::move(pac), 1, "Wii Save Synchronization");
   }
