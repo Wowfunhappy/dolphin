@@ -5,46 +5,38 @@
 
 #include <algorithm>
 #include <atomic>
+#include <list>
 #include <map>
 #include <mutex>
-#include <utility>
-#include <vector>
+#include <shared_mutex>
 
 namespace Config
 {
 using Layers = std::map<LayerType, std::shared_ptr<Layer>>;
-
 static Layers s_layers;
 static std::vector<std::pair<size_t, ConfigChangedCallback>> s_callbacks;
 static size_t s_next_callback_id = 0;
 static u32 s_callback_guards = 0;
 static std::atomic<u64> s_config_version = 0;
 
-static std::mutex s_layers_rw_lock;
-
-using ReadLock = std::unique_lock<std::mutex>;
-using WriteLock = std::unique_lock<std::mutex>;
-
-static void AddLayerInternal(std::shared_ptr<Layer> layer)
+Layers* GetLayers()
 {
-  {
-    WriteLock lock(s_layers_rw_lock);
+  return &s_layers;
+}
 
-    const Config::LayerType layer_type = layer->GetLayer();
-    s_layers.insert_or_assign(layer_type, std::move(layer));
-  }
+void AddLayer(std::unique_ptr<Layer> layer)
+{
+  s_layers[layer->GetLayer()] = std::move(layer);
   OnConfigChanged();
 }
 
 void AddLayer(std::unique_ptr<ConfigLayerLoader> loader)
 {
-  AddLayerInternal(std::make_shared<Layer>(std::move(loader)));
+  AddLayer(std::make_unique<Layer>(std::move(loader)));
 }
 
 std::shared_ptr<Layer> GetLayer(LayerType layer)
 {
-  //ReadLock lock(s_layers_rw_lock);
-
   std::shared_ptr<Layer> result;
   const auto it = s_layers.find(layer);
   if (it != s_layers.end())
@@ -56,12 +48,12 @@ std::shared_ptr<Layer> GetLayer(LayerType layer)
 
 void RemoveLayer(LayerType layer)
 {
-  {
-    WriteLock lock(s_layers_rw_lock);
-
-    s_layers.erase(layer);
-  }
+  s_layers.erase(layer);
   OnConfigChanged();
+}
+bool LayerExists(LayerType layer)
+{
+  return s_layers.find(layer) != s_layers.end();
 }
 
 size_t AddConfigChangedCallback(ConfigChangedCallback func)
@@ -86,14 +78,10 @@ void RemoveConfigChangedCallback(size_t callback_id)
 
 void OnConfigChanged()
 {
-  // Increment the config version to invalidate caches.
-  // To ensure that getters do not return stale data, this should always be done
-  // even when callbacks are suppressed.
   s_config_version.fetch_add(1, std::memory_order_relaxed);
-
   if (s_callback_guards)
     return;
-
+  
   for (const auto& callback : s_callbacks)
     callback.second();
 }
@@ -106,23 +94,15 @@ u64 GetConfigVersion()
 // Explicit load and save of layers
 void Load()
 {
-  {
-    //ReadLock lock(s_layers_rw_lock);
-
-    for (auto& layer : s_layers)
-      layer.second->Load();
-  }
+  for (auto& layer : s_layers)
+    layer.second->Load();
   OnConfigChanged();
 }
 
 void Save()
 {
-  {
-    //ReadLock lock(s_layers_rw_lock);
-
-    for (auto& layer : s_layers)
-      layer.second->Save();
-  }
+  for (auto& layer : s_layers)
+    layer.second->Save();
   OnConfigChanged();
 }
 
@@ -134,31 +114,27 @@ void Init()
 
 void Shutdown()
 {
-  WriteLock lock(s_layers_rw_lock);
-
   s_layers.clear();
   s_callbacks.clear();
 }
 
 void ClearCurrentRunLayer()
 {
-  WriteLock lock(s_layers_rw_lock);
-
-  s_layers.insert_or_assign(LayerType::CurrentRun, std::make_shared<Layer>(LayerType::CurrentRun));
+  s_layers[LayerType::CurrentRun] = std::make_unique<Layer>(LayerType::CurrentRun);
 }
 
 static const std::map<System, std::string> system_to_name = {
-    {System::Main, "Dolphin"},
-    {System::GCPad, "GCPad"},
-    {System::WiiPad, "Wiimote"},
-    {System::GCKeyboard, "GCKeyboard"},
-    {System::GFX, "Graphics"},
-    {System::Logger, "Logger"},
-    {System::Debugger, "Debugger"},
-    {System::SYSCONF, "SYSCONF"},
-    {System::DualShockUDPClient, "DualShockUDPClient"},
-    {System::FreeLook, "FreeLook"},
-    {System::Session, "Session"}};
+  {System::Main, "Dolphin"},
+  {System::GCPad, "GCPad"},
+  {System::WiiPad, "Wiimote"},
+  {System::GCKeyboard, "GCKeyboard"},
+  {System::GFX, "Graphics"},
+  {System::Logger, "Logger"},
+  {System::Debugger, "Debugger"},
+  {System::SYSCONF, "SYSCONF"},
+  {System::DualShockUDPClient, "DualShockUDPClient"},
+  {System::FreeLook, "FreeLook"},
+  {System::Session, "Session"}};
 
 const std::string& GetSystemName(System system)
 {
@@ -168,31 +144,29 @@ const std::string& GetSystemName(System system)
 std::optional<System> GetSystemFromName(const std::string& name)
 {
   const auto system = std::find_if(system_to_name.begin(), system_to_name.end(),
-                                   [&name](const auto& entry) { return entry.second == name; });
+                    [&name](const auto& entry) { return entry.second == name; });
   if (system != system_to_name.end())
     return system->first;
-
+  
   return {};
 }
 
 const std::string& GetLayerName(LayerType layer)
 {
   static const std::map<LayerType, std::string> layer_to_name = {
-      {LayerType::Base, "Base"},
-      {LayerType::GlobalGame, "Global GameINI"},
-      {LayerType::LocalGame, "Local GameINI"},
-      {LayerType::Netplay, "Netplay"},
-      {LayerType::Movie, "Movie"},
-      {LayerType::CommandLine, "Command Line"},
-      {LayerType::CurrentRun, "Current Run"},
+    {LayerType::Base, "Base"},
+    {LayerType::GlobalGame, "Global GameINI"},
+    {LayerType::LocalGame, "Local GameINI"},
+    {LayerType::Netplay, "Netplay"},
+    {LayerType::Movie, "Movie"},
+    {LayerType::CommandLine, "Command Line"},
+    {LayerType::CurrentRun, "Current Run"},
   };
   return layer_to_name.at(layer);
 }
 
 LayerType GetActiveLayerForConfig(const Location& config)
 {
-  //ReadLock lock(s_layers_rw_lock);
-
   for (auto layer : SEARCH_ORDER)
   {
     const auto it = s_layers.find(layer);
@@ -202,7 +176,7 @@ LayerType GetActiveLayerForConfig(const Location& config)
         return layer;
     }
   }
-
+  
   // If config is not present in any layer, base layer is considered active.
   return LayerType::Base;
 }
@@ -211,7 +185,7 @@ std::optional<std::string> GetAsString(const Location& config)
 {
   std::optional<std::string> result;
   //ReadLock lock(s_layers_rw_lock);
-
+  
   for (auto layer : SEARCH_ORDER)
   {
     const auto it = s_layers.find(layer);
@@ -222,7 +196,7 @@ std::optional<std::string> GetAsString(const Location& config)
         break;
     }
   }
-
+  
   return result;
 }
 
@@ -235,8 +209,8 @@ ConfigChangeCallbackGuard::~ConfigChangeCallbackGuard()
 {
   if (--s_callback_guards)
     return;
-
+  
   OnConfigChanged();
 }
-
+  
 }  // namespace Config
