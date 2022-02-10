@@ -5,10 +5,11 @@
 
 #include <algorithm>
 #include <atomic>
-#include <list>
 #include <map>
 #include <mutex>
 #include <shared_mutex>
+#include <utility>
+#include <vector>
 
 namespace Config
 {
