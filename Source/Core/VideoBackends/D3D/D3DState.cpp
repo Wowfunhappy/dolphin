@@ -1,16 +1,18 @@
 // Copyright 2014 Dolphin Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "VideoBackends/D3D/D3DState.h"
+
 #include <algorithm>
 #include <array>
 
+#include "Common/Assert.h"
 #include "Common/BitSet.h"
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
 
 #include "VideoBackends/D3D/D3DBase.h"
-#include "VideoBackends/D3D/D3DState.h"
 #include "VideoBackends/D3D/DXTexture.h"
 #include "VideoBackends/D3DCommon/D3DCommon.h"
 #include "VideoCommon/VideoConfig.h"
@@ -347,7 +349,7 @@ ID3D11SamplerState* StateCache::Get(SamplerState state)
 
   ComPtr<ID3D11SamplerState> res;
   HRESULT hr = D3D::device->CreateSamplerState(&sampdc, res.GetAddressOf());
-  CHECK(SUCCEEDED(hr), "Creating D3D sampler state failed");
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating D3D sampler state failed: {}", DX11HRWrap(hr));
   return m_sampler.emplace(state, std::move(res)).first->second.Get();
 }
 
@@ -385,7 +387,7 @@ ID3D11BlendState* StateCache::Get(BlendingState state)
     {
       return m_blend.emplace(state.hex, std::move(res)).first->second.Get();
     }
-    WARN_LOG_FMT(VIDEO, "Creating D3D blend state failed with an error: {:08X}", hr);
+    WARN_LOG_FMT(VIDEO, "Creating D3D blend state failed with an error: {}", DX11HRWrap(hr));
   }
 
   D3D11_BLEND_DESC desc = {};
@@ -424,7 +426,7 @@ ID3D11BlendState* StateCache::Get(BlendingState state)
 
   ComPtr<ID3D11BlendState> res;
   HRESULT hr = D3D::device->CreateBlendState(&desc, res.GetAddressOf());
-  CHECK(SUCCEEDED(hr), "Creating D3D blend state failed");
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating D3D blend state failed: {}", DX11HRWrap(hr));
   return m_blend.emplace(state.hex, std::move(res)).first->second.Get();
 }
 
@@ -445,7 +447,7 @@ ID3D11RasterizerState* StateCache::Get(RasterizationState state)
 
   ComPtr<ID3D11RasterizerState> res;
   HRESULT hr = D3D::device->CreateRasterizerState(&desc, res.GetAddressOf());
-  CHECK(SUCCEEDED(hr), "Creating D3D rasterizer state failed");
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating D3D rasterizer state failed: {}", DX11HRWrap(hr));
   return m_raster.emplace(state.hex, std::move(res)).first->second.Get();
 }
 
@@ -487,7 +489,7 @@ ID3D11DepthStencilState* StateCache::Get(DepthState state)
 
   ComPtr<ID3D11DepthStencilState> res;
   HRESULT hr = D3D::device->CreateDepthStencilState(&depthdc, res.GetAddressOf());
-  CHECK(SUCCEEDED(hr), "Creating D3D depth stencil state failed");
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating D3D depth stencil state failed: {}", DX11HRWrap(hr));
   return m_depth.emplace(state.hex, std::move(res)).first->second.Get();
 }
 

@@ -1300,42 +1300,30 @@ TextureCacheBase::GetTexture(const int textureCacheSafetyColorSampleSize, Textur
   // Search the texture cache for textures by address
   //
   // Find all texture cache entries for the current texture address, and decide whether to use one
-  // of
-  // them, or to create a new one
+  // of them, or to create a new one
   //
   // In most cases, the fastest way is to use only one texture cache entry for the same address.
-  // Usually,
-  // when a texture changes, the old version of the texture is unlikely to be used again. If there
-  // were
-  // new cache entries created for normal texture updates, there would be a slowdown due to a huge
-  // amount
-  // of unused cache entries. Also thanks to texture pooling, overwriting an existing cache entry is
-  // faster than creating a new one from scratch.
+  // Usually, when a texture changes, the old version of the texture is unlikely to be used again.
+  // If there were new cache entries created for normal texture updates, there would be a slowdown
+  // due to a huge amount of unused cache entries. Also thanks to texture pooling, overwriting an
+  // existing cache entry is faster than creating a new one from scratch.
   //
   // Some games use the same address for different textures though. If the same cache entry was used
-  // in
-  // this case, it would be constantly overwritten, and effectively there wouldn't be any caching
-  // for
-  // those textures. Examples for this are Metroid Prime and Castlevania 3. Metroid Prime has
-  // multiple
-  // sets of fonts on each other stored in a single texture and uses the palette to make different
-  // characters visible or invisible. In Castlevania 3 some textures are used for 2 different things
-  // or
-  // at least in 2 different ways(size 1024x1024 vs 1024x256).
+  // in this case, it would be constantly overwritten, and effectively there wouldn't be any caching
+  // for those textures. Examples for this are Metroid Prime and Castlevania 3. Metroid Prime has
+  // multiple sets of fonts on each other stored in a single texture and uses the palette to make
+  // different characters visible or invisible. In Castlevania 3 some textures are used for 2
+  // different things or at least in 2 different ways (size 1024x1024 vs 1024x256).
   //
   // To determine whether to use multiple cache entries or a single entry, use the following
-  // heuristic:
-  // If the same texture address is used several times during the same frame, assume the address is
-  // used
-  // for different purposes and allow creating an additional cache entry. If there's at least one
-  // entry
-  // that hasn't been used for the same frame, then overwrite it, in order to keep the cache as
-  // small as
-  // possible. If the current texture is found in the cache, use that entry.
+  // heuristic: If the same texture address is used several times during the same frame, assume the
+  // address is used for different purposes and allow creating an additional cache entry. If there's
+  // at least one entry that hasn't been used for the same frame, then overwrite it, in order to
+  // keep the cache as small as possible. If the current texture is found in the cache, use that
+  // entry.
   //
   // For efb copies, the entry created in CopyRenderTargetToTexture always has to be used, or else
-  // it was
-  // done in vain.
+  // it was done in vain.
   auto iter_range = textures_by_address.equal_range(texture_info.GetRawAddress());
   TexAddrCache::iterator iter = iter_range.first;
   TexAddrCache::iterator oldest_entry = iter;
@@ -2622,7 +2610,8 @@ bool TextureCacheBase::CreateUtilityTextures()
 {
   constexpr TextureConfig encoding_texture_config(
       EFB_WIDTH * 4, 1024, 1, 1, 1, AbstractTextureFormat::BGRA8, AbstractTextureFlag_RenderTarget);
-  m_efb_encoding_texture = g_renderer->CreateTexture(encoding_texture_config);
+  m_efb_encoding_texture =
+      g_renderer->CreateTexture(encoding_texture_config, "EFB encoding texture");
   if (!m_efb_encoding_texture)
     return false;
 
@@ -2634,7 +2623,8 @@ bool TextureCacheBase::CreateUtilityTextures()
   {
     constexpr TextureConfig decoding_texture_config(
         1024, 1024, 1, 1, 1, AbstractTextureFormat::RGBA8, AbstractTextureFlag_ComputeImage);
-    m_decoding_texture = g_renderer->CreateTexture(decoding_texture_config);
+    m_decoding_texture =
+        g_renderer->CreateTexture(decoding_texture_config, "GPU texture decoding texture");
     if (!m_decoding_texture)
       return false;
   }
@@ -2686,7 +2676,8 @@ void TextureCacheBase::CopyEFBToCacheEntry(TCacheEntry* entry, bool is_depth_cop
   };
   Uniforms uniforms;
   const float rcp_efb_width = 1.0f / static_cast<float>(g_framebuffer_manager->GetEFBWidth());
-  const float rcp_efb_height = 1.0f / static_cast<float>(g_framebuffer_manager->GetEFBHeight());
+  const u32 efb_height = g_framebuffer_manager->GetEFBHeight();
+  const float rcp_efb_height = 1.0f / static_cast<float>(efb_height);
   uniforms.src_left = framebuffer_rect.left * rcp_efb_width;
   uniforms.src_top = framebuffer_rect.top * rcp_efb_height;
   uniforms.src_width = framebuffer_rect.GetWidth() * rcp_efb_width;
@@ -2695,9 +2686,15 @@ void TextureCacheBase::CopyEFBToCacheEntry(TCacheEntry* entry, bool is_depth_cop
   uniforms.filter_coefficients[1] = filter_coefficients.middle;
   uniforms.filter_coefficients[2] = filter_coefficients.lower;
   uniforms.gamma_rcp = 1.0f / gamma;
-  uniforms.clamp_top = clamp_top ? framebuffer_rect.top * rcp_efb_height : 0.0f;
-  int bottom_coord = framebuffer_rect.bottom - 1;
-  uniforms.clamp_bottom = clamp_bottom ? bottom_coord * rcp_efb_height : 1.0f;
+  //   NOTE: when the clamp bits aren't set, the hardware will happily read beyond the EFB,
+  //         which returns random garbage from the empty bus (confirmed by hardware tests).
+  //
+  //         In our implementation, the garbage just so happens to be the top or bottom row.
+  //         Statistically, that could happen.
+  const u32 top_coord = clamp_top ? framebuffer_rect.top : 0;
+  uniforms.clamp_top = (static_cast<float>(top_coord) + .5f) * rcp_efb_height;
+  const u32 bottom_coord = (clamp_bottom ? framebuffer_rect.bottom : efb_height) - 1;
+  uniforms.clamp_bottom = (static_cast<float>(bottom_coord) + .5f) * rcp_efb_height;
   uniforms.pixel_height = g_ActiveConfig.bCopyEFBScaled ? rcp_efb_height : 1.0f / EFB_HEIGHT;
   uniforms.padding = 0;
   g_vertex_manager->UploadUtilityUniforms(&uniforms, sizeof(uniforms));
@@ -2754,16 +2751,23 @@ void TextureCacheBase::CopyEFB(AbstractStagingTexture* dst, const EFBCopyParams&
     u32 padding;
   };
   Uniforms encoder_params;
-  const float rcp_efb_height = 1.0f / static_cast<float>(g_framebuffer_manager->GetEFBHeight());
+  const u32 efb_height = g_framebuffer_manager->GetEFBHeight();
+  const float rcp_efb_height = 1.0f / static_cast<float>(efb_height);
   encoder_params.position_uniform[0] = src_rect.left;
   encoder_params.position_uniform[1] = src_rect.top;
   encoder_params.position_uniform[2] = static_cast<s32>(native_width);
   encoder_params.position_uniform[3] = scale_by_half ? 2 : 1;
   encoder_params.y_scale = y_scale;
   encoder_params.gamma_rcp = 1.0f / gamma;
-  encoder_params.clamp_top = clamp_top ? framebuffer_rect.top * rcp_efb_height : 0.0f;
-  int bottom_coord = framebuffer_rect.bottom - 1;
-  encoder_params.clamp_bottom = clamp_bottom ? bottom_coord * rcp_efb_height : 1.0f;
+  //   NOTE: when the clamp bits aren't set, the hardware will happily read beyond the EFB,
+  //         which returns random garbage from the empty bus (confirmed by hardware tests).
+  //
+  //         In our implementation, the garbage just so happens to be the top or bottom row.
+  //         Statistically, that could happen.
+  const u32 top_coord = clamp_top ? framebuffer_rect.top : 0;
+  encoder_params.clamp_top = (static_cast<float>(top_coord) + .5f) * rcp_efb_height;
+  const u32 bottom_coord = (clamp_bottom ? framebuffer_rect.bottom : efb_height) - 1;
+  encoder_params.clamp_bottom = (static_cast<float>(bottom_coord) + .5f) * rcp_efb_height;
   encoder_params.filter_coefficients[0] = filter_coefficients.upper;
   encoder_params.filter_coefficients[1] = filter_coefficients.middle;
   encoder_params.filter_coefficients[2] = filter_coefficients.lower;

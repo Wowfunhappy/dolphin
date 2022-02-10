@@ -22,11 +22,11 @@ namespace fs = std::filesystem;
 
 #include "Common/Align.h"
 #include "Common/CDUtils.h"
-#include "Common/CRC32.h"
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
 #include "Common/Config/Config.h"
 #include "Common/FileUtil.h"
+#include "Common/Hash.h"
 #include "Common/IOFile.h"
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
@@ -155,6 +155,11 @@ const std::vector<u64>& BootSessionData::GetWiiSyncTitles() const
   return m_wii_sync_titles;
 }
 
+const std::string& BootSessionData::GetWiiSyncRedirectFolder() const
+{
+  return m_wii_sync_redirect_folder;
+}
+
 void BootSessionData::InvokeWiiSyncCleanup() const
 {
   if (m_wii_sync_cleanup)
@@ -162,10 +167,12 @@ void BootSessionData::InvokeWiiSyncCleanup() const
 }
 
 void BootSessionData::SetWiiSyncData(std::unique_ptr<IOS::HLE::FS::FileSystem> fs,
-                                     std::vector<u64> titles, WiiSyncCleanupFunction cleanup)
+                                     std::vector<u64> titles, std::string redirect_folder,
+                                     WiiSyncCleanupFunction cleanup)
 {
   m_wii_sync_fs = std::move(fs);
   m_wii_sync_titles = std::move(titles);
+  m_wii_sync_redirect_folder = std::move(redirect_folder);
   m_wii_sync_cleanup = std::move(cleanup);
 }
 
@@ -198,7 +205,7 @@ std::unique_ptr<BootParameters> BootParameters::GenerateFromFile(std::vector<std
   std::string folder_path;
   std::string extension;
   SplitPath(paths.front(), &folder_path, nullptr, &extension);
-  std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+  Common::ToLower(&extension);
 
   if (extension == ".m3u" || extension == ".m3u8")
   {
@@ -207,7 +214,7 @@ std::unique_ptr<BootParameters> BootParameters::GenerateFromFile(std::vector<std
       return {};
 
     SplitPath(paths.front(), nullptr, nullptr, &extension);
-    std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+    Common::ToLower(&extension);
   }
 
   std::string path = paths.front();
@@ -219,7 +226,7 @@ std::unique_ptr<BootParameters> BootParameters::GenerateFromFile(std::vector<std
   {
     const std::string display_name = GetAndroidContentDisplayName(path);
     SplitPath(display_name, nullptr, nullptr, &extension);
-    std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+    Common::ToLower(&extension);
   }
 #endif
 
@@ -643,7 +650,7 @@ BootExecutableReader::BootExecutableReader(const std::string& file_name)
 
 BootExecutableReader::BootExecutableReader(File::IOFile file)
 {
-  file.Seek(0, SEEK_SET);
+  file.Seek(0, File::SeekOrigin::Begin);
   m_bytes.resize(file.GetSize());
   file.ReadBytes(m_bytes.data(), m_bytes.size());
 }

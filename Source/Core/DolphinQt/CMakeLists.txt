@@ -360,8 +360,8 @@ PRIVATE
 if (WIN32)
   target_link_libraries(dolphin-emu
   PRIVATE
-	  gdi32.lib
-		shell32.lib
+    gdi32.lib
+    shell32.lib
   )
 endif()
 
@@ -369,8 +369,15 @@ if (MSVC)
   # Don't propogate warnings in qt headers to Dolphin
   target_compile_options(dolphin-emu PRIVATE /experimental:external)
   target_compile_options(dolphin-emu PRIVATE /external:W0)
-  target_compile_options(dolphin-emu PRIVATE "/external:I${Qt5Gui_PRIVATE_INCLUDE_DIRS}")
-  target_compile_options(dolphin-emu PRIVATE "/external:I${Qt5Widgets_PRIVATE_INCLUDE_DIRS}")
+  set(qtGui "")
+  set(qtGuiPriv "")
+  set(qtWidgetsPriv "")
+  list(TRANSFORM Qt5Gui_INCLUDE_DIRS PREPEND "/external:I" OUTPUT_VARIABLE qtGui)
+  list(TRANSFORM Qt5Gui_PRIVATE_INCLUDE_DIRS PREPEND "/external:I" OUTPUT_VARIABLE qtGuiPriv)
+  list(TRANSFORM Qt5Widgets_PRIVATE_INCLUDE_DIRS PREPEND "/external:I" OUTPUT_VARIABLE qtWidgetsPriv)
+  target_compile_options(dolphin-emu PRIVATE "${qtGui}")
+  target_compile_options(dolphin-emu PRIVATE "${qtGuiPriv}")
+  target_compile_options(dolphin-emu PRIVATE "${qtWidgets}")
 endif()
 
 if(WIN32)

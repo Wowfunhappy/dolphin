@@ -21,7 +21,6 @@
     <ClInclude Include="Common\BitUtils.h" />
     <ClInclude Include="Common\BlockingLoop.h" />
     <ClInclude Include="Common\CDUtils.h" />
-    <ClInclude Include="Common\CRC32.h" />
     <ClInclude Include="Common\ChunkFile.h" />
     <ClInclude Include="Common\CodeBlock.h" />
     <ClInclude Include="Common\ColorUtil.h" />
@@ -108,6 +107,7 @@
     <ClInclude Include="Common\GL\GLUtil.h" />
     <ClInclude Include="Common\GL\GLX11Window.h" />
     <ClInclude Include="Common\Hash.h" />
+    <ClInclude Include="Common\HRWrap.h" />
     <ClInclude Include="Common\HttpRequest.h" />
     <ClInclude Include="Common\Image.h" />
     <ClInclude Include="Common\ImageC.h" />
@@ -124,7 +124,6 @@
     <ClInclude Include="Common\Logging\LogManager.h" />
     <ClInclude Include="Common\MathUtil.h" />
     <ClInclude Include="Common\Matrix.h" />
-    <ClInclude Include="Common\MD5.h" />
     <ClInclude Include="Common\MemArena.h" />
     <ClInclude Include="Common\MemoryUtil.h" />
     <ClInclude Include="Common\MinizipUtil.h" />
@@ -217,11 +216,8 @@
     <ClInclude Include="Core\DSP\Jit\x64\DSPJitTables.h" />
     <ClInclude Include="Core\DSP\LabelMap.h" />
     <ClInclude Include="Core\DSPEmulator.h" />
-    <ClInclude Include="Core\FifoPlayer\FifoAnalyzer.h" />
     <ClInclude Include="Core\FifoPlayer\FifoDataFile.h" />
-    <ClInclude Include="Core\FifoPlayer\FifoPlaybackAnalyzer.h" />
     <ClInclude Include="Core\FifoPlayer\FifoPlayer.h" />
-    <ClInclude Include="Core\FifoPlayer\FifoRecordAnalyzer.h" />
     <ClInclude Include="Core\FifoPlayer\FifoRecorder.h" />
     <ClInclude Include="Core\FreeLookConfig.h" />
     <ClInclude Include="Core\FreeLookManager.h" />
@@ -690,7 +686,6 @@
     <ClCompile Include="AudioCommon\WaveFile.cpp" />
     <ClCompile Include="Common\Analytics.cpp" />
     <ClCompile Include="Common\CDUtils.cpp" />
-    <ClCompile Include="Common\CRC32.cpp" />
     <ClCompile Include="Common\ColorUtil.cpp" />
     <ClCompile Include="Common\CommonFuncs.cpp" />
     <ClCompile Include="Common\CompatPatches.cpp" />
@@ -713,6 +708,7 @@
     <ClCompile Include="Common\GL\GLInterface\WGL.cpp" />
     <ClCompile Include="Common\GL\GLUtil.cpp" />
     <ClCompile Include="Common\Hash.cpp" />
+    <ClCompile Include="Common\HRWrap.cpp" />
     <ClCompile Include="Common\HttpRequest.cpp" />
     <ClCompile Include="Common\Image.cpp" />
     <ClCompile Include="Common\ImageC.c">
@@ -728,8 +724,7 @@
     <ClCompile Include="Common\Logging\LogManager.cpp" />
     <ClCompile Include="Common\MathUtil.cpp" />
     <ClCompile Include="Common\Matrix.cpp" />
-    <ClCompile Include="Common\MD5.cpp" />
-    <ClCompile Include="Common\MemArena.cpp" />
+    <ClCompile Include="Common\MemArenaWin.cpp" />
     <ClCompile Include="Common\MemoryUtil.cpp" />
     <ClCompile Include="Common\MsgHandler.cpp" />
     <ClCompile Include="Common\NandPaths.cpp" />
@@ -815,11 +810,8 @@
     <ClCompile Include="Core\DSP\Jit\x64\DSPJitUtil.cpp" />
     <ClCompile Include="Core\DSP\LabelMap.cpp" />
     <ClCompile Include="Core\DSPEmulator.cpp" />
-    <ClCompile Include="Core\FifoPlayer\FifoAnalyzer.cpp" />
     <ClCompile Include="Core\FifoPlayer\FifoDataFile.cpp" />
-    <ClCompile Include="Core\FifoPlayer\FifoPlaybackAnalyzer.cpp" />
     <ClCompile Include="Core\FifoPlayer\FifoPlayer.cpp" />
-    <ClCompile Include="Core\FifoPlayer\FifoRecordAnalyzer.cpp" />
     <ClCompile Include="Core\FifoPlayer\FifoRecorder.cpp" />
     <ClCompile Include="Core\FreeLookConfig.cpp" />
     <ClCompile Include="Core\FreeLookManager.cpp" />
@@ -1246,5 +1238,6 @@
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="Common\BitField.natvis" />
+    <Natvis Include="Common\EnumMap.natvis" />
   </ItemGroup>
 </Project>

@@ -4,7 +4,6 @@
 #include "VideoBackends/OGL/OGLRender.h"
 
 #include <algorithm>
-#include <cinttypes>
 #include <cmath>
 #include <cstdio>
 #include <memory>
@@ -513,6 +512,9 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
     // ARB_get_texture_sub_image (unlikely, except maybe on NVIDIA), we can use that instead.
     g_Config.backend_info.bSupportsDepthReadback = g_ogl_config.bSupportsTextureSubImage;
 
+    // GL_TEXTURE_LOD_BIAS is not supported on GLES.
+    g_Config.backend_info.bSupportsLodBiasInSampler = false;
+
     if (GLExtensions::Supports("GL_EXT_shader_framebuffer_fetch"))
     {
       g_ogl_config.SupportedFramebufferFetch = EsFbFetchType::FbFetchExt;
@@ -581,6 +583,7 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
       g_ogl_config.bSupports3DTextureStorageMultisample = true;
       g_Config.backend_info.bSupportsBitfield = true;
       g_Config.backend_info.bSupportsDynamicSamplerIndexing = true;
+      g_Config.backend_info.bSupportsSettingObjectNames = true;
     }
   }
   else
@@ -626,6 +629,7 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
       g_ogl_config.bSupportsTextureStorage = true;
       g_ogl_config.bSupportsImageLoadStore = true;
       g_Config.backend_info.bSupportsSSAA = true;
+      g_Config.backend_info.bSupportsSettingObjectNames = true;
 
       // Compute shaders are core in GL4.3.
       g_Config.backend_info.bSupportsComputeShaders = true;

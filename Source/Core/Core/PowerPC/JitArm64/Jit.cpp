@@ -28,8 +28,12 @@
 using namespace Arm64Gen;
 
 constexpr size_t CODE_SIZE = 1024 * 1024 * 32;
-constexpr size_t FARCODE_SIZE = 1024 * 1024 * 16;
-constexpr size_t FARCODE_SIZE_MMU = 1024 * 1024 * 48;
+// We use a bigger farcode size for JitArm64 than Jit64, because JitArm64 always emits farcode
+// for the slow path of each loadstore instruction. Jit64 postpones emitting farcode until the
+// farcode actually is needed, saving it from having to emit farcode for most instructions.
+// TODO: Perhaps implement something similar to Jit64. But using more RAM isn't much of a problem.
+constexpr size_t FARCODE_SIZE = 1024 * 1024 * 64;
+constexpr size_t FARCODE_SIZE_MMU = 1024 * 1024 * 64;
 
 constexpr size_t STACK_SIZE = 2 * 1024 * 1024;
 constexpr size_t SAFE_STACK_SIZE = 512 * 1024;
@@ -44,11 +48,11 @@ JitArm64::~JitArm64() = default;
 
 void JitArm64::Init()
 {
-  const size_t child_code_size = SConfig::GetInstance().bMMU ? FARCODE_SIZE_MMU : FARCODE_SIZE;
+  const size_t child_code_size = m_mmu_enabled ? FARCODE_SIZE_MMU : FARCODE_SIZE;
   AllocCodeSpace(CODE_SIZE + child_code_size);
   AddChildCodeSpace(&m_far_code, child_code_size);
 
-  jo.fastmem_arena = SConfig::GetInstance().bFastmem && Memory::InitFastmemArena();
+  jo.fastmem_arena = m_fastmem_enabled && Memory::InitFastmemArena();
   jo.enableBlocklink = true;
   jo.optimizeGatherPipe = true;
   UpdateMemoryAndExceptionOptions();
@@ -63,8 +67,7 @@ void JitArm64::Init()
   analyzer.SetOption(PPCAnalyst::PPCAnalyzer::OPTION_CARRY_MERGE);
   analyzer.SetOption(PPCAnalyst::PPCAnalyzer::OPTION_BRANCH_FOLLOW);
 
-  m_enable_blr_optimization = jo.enableBlocklink && SConfig::GetInstance().bFastmem &&
-                              !SConfig::GetInstance().bEnableDebugging;
+  m_enable_blr_optimization = jo.enableBlocklink && m_fastmem_enabled && !m_enable_debugging;
   m_cleanup_after_stackfault = false;
 
   AllocStack();
@@ -651,7 +654,7 @@ void JitArm64::Jit(u32 em_address, bool clear_cache_and_retry_on_failure)
 
   std::size_t block_size = m_code_buffer.size();
 
-  if (SConfig::GetInstance().bEnableDebugging)
+  if (m_enable_debugging)
   {
     // Comment out the following to disable breakpoints (speed-up)
     block_size = 1;
@@ -712,8 +715,9 @@ void JitArm64::Jit(u32 em_address, bool clear_cache_and_retry_on_failure)
     return;
   }
 
-  PanicAlertT("JIT failed to find code space after a cache clear. This should never happen. Please "
-              "report this incident on the bug tracker. Dolphin will now exit.");
+  PanicAlertFmtT(
+      "JIT failed to find code space after a cache clear. This should never happen. Please "
+      "report this incident on the bug tracker. Dolphin will now exit.");
   exit(-1);
 }
 
@@ -816,7 +820,7 @@ bool JitArm64::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
     js.downcountAmount += opinfo->numCycles;
     js.isLastInstruction = i == (code_block.m_num_instructions - 1);
 
-    if (!SConfig::GetInstance().bEnableDebugging)
+    if (!m_enable_debugging)
       js.downcountAmount += PatchEngine::GetSpeedhackCycles(js.compilerPC);
 
     // Skip calling UpdateLastUsed for lmw/stmw - it usually hurts more than it helps
@@ -946,7 +950,7 @@ bool JitArm64::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
         js.firstFPInstructionFound = true;
       }
 
-      if (SConfig::GetInstance().bJITRegisterCacheOff)
+      if (bJITRegisterCacheOff)
       {
         gpr.Flush(FlushMode::All, ARM64Reg::INVALID_REG);
         fpr.Flush(FlushMode::All, ARM64Reg::INVALID_REG);
@@ -961,7 +965,7 @@ bool JitArm64::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
         FlushCarry();
 
       // If we have a register that will never be used again, discard or flush it.
-      if (!SConfig::GetInstance().bJITRegisterCacheOff)
+      if (!bJITRegisterCacheOff)
       {
         gpr.DiscardRegisters(op.gprDiscardable);
         fpr.DiscardRegisters(op.fprDiscardable);

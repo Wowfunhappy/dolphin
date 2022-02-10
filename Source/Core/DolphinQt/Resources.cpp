@@ -1,6 +1,8 @@
 // Copyright 2015 Dolphin Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "DolphinQt/Resources.h"
+
 #include <QGuiApplication>
 #include <QIcon>
 #include <QPixmap>
@@ -8,9 +10,8 @@
 
 #include "Common/FileUtil.h"
 
-#include "Core/ConfigManager.h"
+#include "Core/Config/MainSettings.h"
 
-#include "DolphinQt/Resources.h"
 #include "DolphinQt/Settings.h"
 
 #ifdef _WIN32
@@ -51,7 +52,7 @@ QPixmap Resources::GetPixmap(std::string_view name, const QString& dir)
 
 static QString GetCurrentThemeDir()
 {
-  return QString::fromStdString(File::GetThemeDir(SConfig::GetInstance().theme_name));
+  return QString::fromStdString(File::GetThemeDir(Config::Get(Config::MAIN_THEME_NAME)));
 }
 
 static QString GetResourcesDir()
