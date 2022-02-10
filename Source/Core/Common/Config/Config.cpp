@@ -22,7 +22,7 @@ static std::atomic<u64> s_config_version = 0;
 
 static std::mutex s_layers_rw_lock;
 
-//using ReadLock = std::shared_lock<std::mutex>;
+using ReadLock = std::unique_lock<std::mutex>;
 using WriteLock = std::unique_lock<std::mutex>;
 
 static void AddLayerInternal(std::shared_ptr<Layer> layer)
@@ -43,7 +43,7 @@ void AddLayer(std::unique_ptr<ConfigLayerLoader> loader)
 
 std::shared_ptr<Layer> GetLayer(LayerType layer)
 {
-  //ReadLock lock(s_layers_rw_lock);
+  ReadLock lock(s_layers_rw_lock);
 
   std::shared_ptr<Layer> result;
   const auto it = s_layers.find(layer);
@@ -107,7 +107,7 @@ u64 GetConfigVersion()
 void Load()
 {
   {
-    //ReadLock lock(s_layers_rw_lock);
+    ReadLock lock(s_layers_rw_lock);
 
     for (auto& layer : s_layers)
       layer.second->Load();
@@ -118,7 +118,7 @@ void Load()
 void Save()
 {
   {
-    //ReadLock lock(s_layers_rw_lock);
+    ReadLock lock(s_layers_rw_lock);
 
     for (auto& layer : s_layers)
       layer.second->Save();
@@ -191,7 +191,7 @@ const std::string& GetLayerName(LayerType layer)
 
 LayerType GetActiveLayerForConfig(const Location& config)
 {
-  //ReadLock lock(s_layers_rw_lock);
+  ReadLock lock(s_layers_rw_lock);
 
   for (auto layer : SEARCH_ORDER)
   {
@@ -210,7 +210,7 @@ LayerType GetActiveLayerForConfig(const Location& config)
 std::optional<std::string> GetAsString(const Location& config)
 {
   std::optional<std::string> result;
-  //ReadLock lock(s_layers_rw_lock);
+  ReadLock lock(s_layers_rw_lock);
 
   for (auto layer : SEARCH_ORDER)
   {
