@@ -1,4 +1,8 @@
 module;
+#ifndef __cpp_modules
+#  error Module not supported.
+#endif
+
 // put all implementation-provided headers into the global module fragment
 // to prevent attachment to this module
 #if !defined(_CRT_SECURE_NO_WARNINGS) && defined(_MSC_VER)
@@ -86,7 +90,10 @@ export module fmt;
 #include "fmt/printf.h"
 #include "fmt/xchar.h"
 
+// gcc doesn't yet implement private module fragments
+#if !FMT_GCC_VERSION
 module : private;
+#endif
 
 #include "format.cc"
 #include "os.cc"
