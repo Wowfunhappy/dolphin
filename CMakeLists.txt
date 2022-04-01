@@ -51,6 +51,7 @@ option(ENABLE_TESTS "Enables building the unit tests" ON)
 option(ENABLE_VULKAN "Enables vulkan video backend" ON)
 option(USE_DISCORD_PRESENCE "Enables Discord Rich Presence, show the current game on Discord" ON)
 option(USE_MGBA "Enables GBA controllers emulation using libmgba" ON)
+option(ENABLE_AUTOUPDATE "Enables support for automatic updates" ON)
 
 # Maintainers: if you consider blanket disabling this for your users, please
 # consider the following points:
@@ -485,8 +486,12 @@ if(ENABLE_EGL)
 endif()
 
 if(ENCODE_FRAMEDUMPS)
-  if(WIN32 AND _M_X86_64)
-    set(FFMPEG_DIR Externals/ffmpeg)
+  if(WIN32)
+    if(_M_X86_64)
+      set(FFMPEG_DIR Externals/FFmpeg-bin/x64)
+    elseif(_M_ARM_64)
+      set(FFMPEG_DIR Externals/FFmpeg-bin/ARM64)
+    endif()
   endif()
   find_package(FFmpeg COMPONENTS avcodec avformat avutil swresample swscale)
   if(FFmpeg_FOUND)
@@ -535,6 +540,11 @@ endif()
 if(ENABLE_ANALYTICS)
   message(STATUS "Enabling analytics collection (subject to end-user opt-in)")
   add_definitions(-DUSE_ANALYTICS=1)
+endif()
+
+if(ENABLE_AUTOUPDATE)
+  message(STATUS "Enabling automatic update support")
+  add_definitions(-DAUTOUPDATE=1)
 endif()
 
 ########################################
