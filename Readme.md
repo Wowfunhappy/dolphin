@@ -1,8 +1,8 @@
 # Dolphin for Legacy Mac OS X
 
-This fork of Dolphin has been lightly modified to add compatibility with Mac OS X 10.9 Mavericks. It probably also works on OS X 10.10 – 10.11.
+This build of Dolphin r16009 has been lightly modified to add compatibility with Mac OS X 10.9 Mavericks. It probably also works on OS X 10.10 – 10.13.
 
-This was made possible primarily by the MacPorts's project toolchain backports and legacy-support library. The code changes here primarily remove a few uses of shared_mutex.
+This was made possible primarily by MacPorts's toolchain backports and legacy-support library.
 
 # Download from https://jonathanalland.com/old-osx-projects.html
 
@@ -16,8 +16,8 @@ Attempting to map buttons on certain controllers causes Dolphin to freeze for a 
 On Mavericks:
 
 1. Build and install patched QT 5.9: https://github.com/Wowfunhappy/qt5.9-base-mavericks
-2. sudo port install legacy-support clang-11 hidapi libsdl2
-3. cmake -DCMAKE_C_COMPILER=/opt/local/bin/clang-mp-11 -DCMAKE_CXX_COMPILER=/opt/local/bin/clang++-mp-11 -DENABLE_VULKAN=OFF -DUSE_DISCORD_PRESENCE=OFF -DUSE_MGBA=OFF -DCMAKE_PREFIX_PATH=/usr/local/Qt-5.9.9/ ../dolphin/
+2. sudo port install legacy-support clang-14 hidapi libsdl2 cmake
+3. cmake -DCMAKE_C_COMPILER=/opt/local/bin/clang-mp-14 -DCMAKE_CXX_COMPILER=/opt/local/bin/clang++-mp-14 -DENABLE_VULKAN=OFF -DUSE_DISCORD_PRESENCE=OFF -DUSE_MGBA=OFF -DCMAKE_PREFIX_PATH=/usr/local/Qt-5.9.9/ ../dolphin/
 
 ----
 
