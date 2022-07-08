@@ -195,8 +195,7 @@ public final class SettingsAdapter extends RecyclerView.Adapter<SettingViewHolde
 
     int value = getSelectionForSingleChoiceValue(item);
 
-    AlertDialog.Builder builder = new AlertDialog.Builder(mView.getActivity(),
-            R.style.DolphinDialogBase);
+    AlertDialog.Builder builder = new AlertDialog.Builder(mView.getActivity());
 
     builder.setTitle(item.getName());
     builder.setSingleChoiceItems(item.getChoicesId(), value, this);
@@ -209,8 +208,7 @@ public final class SettingsAdapter extends RecyclerView.Adapter<SettingViewHolde
     mClickedItem = item;
     mClickedPosition = position;
 
-    AlertDialog.Builder builder = new AlertDialog.Builder(mView.getActivity(),
-            R.style.DolphinDialogBase);
+    AlertDialog.Builder builder = new AlertDialog.Builder(mView.getActivity());
 
     builder.setTitle(item.getName());
     builder.setSingleChoiceItems(item.getChoicesId(), item.getSelectValueIndex(getSettings()),
@@ -227,8 +225,7 @@ public final class SettingsAdapter extends RecyclerView.Adapter<SettingViewHolde
 
     int value = getSelectionForSingleChoiceDynamicDescriptionsValue(item);
 
-    AlertDialog.Builder builder = new AlertDialog.Builder(mView.getActivity(),
-            R.style.DolphinDialogBase);
+    AlertDialog.Builder builder = new AlertDialog.Builder(mView.getActivity());
 
     builder.setTitle(item.getName());
     builder.setSingleChoiceItems(item.getChoicesId(), value, this);
@@ -242,8 +239,7 @@ public final class SettingsAdapter extends RecyclerView.Adapter<SettingViewHolde
     mClickedPosition = position;
     mSeekbarMinValue = item.getMin();
     mSeekbarProgress = item.getSelectedValue(getSettings());
-    AlertDialog.Builder builder = new AlertDialog.Builder(mView.getActivity(),
-            R.style.DolphinDialogBase);
+    AlertDialog.Builder builder = new AlertDialog.Builder(mView.getActivity());
 
     LayoutInflater inflater = LayoutInflater.from(mView.getActivity());
     View view = inflater.inflate(R.layout.dialog_seekbar, null);
@@ -281,8 +277,8 @@ public final class SettingsAdapter extends RecyclerView.Adapter<SettingViewHolde
     final MotionAlertDialog dialog = new MotionAlertDialog(mContext, item, this);
     dialog.setTitle(R.string.input_binding);
     dialog.setMessage(String.format(mContext.getString(
-            item instanceof RumbleBindingSetting ?
-                    R.string.input_rumble_description : R.string.input_binding_description),
+                    item instanceof RumbleBindingSetting ?
+                            R.string.input_rumble_description : R.string.input_binding_description),
             item.getName()));
     dialog.setButton(AlertDialog.BUTTON_NEGATIVE, mContext.getString(R.string.cancel), this);
     dialog.setButton(AlertDialog.BUTTON_NEUTRAL, mContext.getString(R.string.clear),
@@ -303,7 +299,7 @@ public final class SettingsAdapter extends RecyclerView.Adapter<SettingViewHolde
 
     if (!PermissionsHandler.isExternalStorageLegacy())
     {
-      AlertDialog.Builder builder = new AlertDialog.Builder(mContext, R.style.DolphinDialogBase);
+      AlertDialog.Builder builder = new AlertDialog.Builder(mContext);
       builder.setMessage(R.string.path_not_changeable_scoped_storage);
       builder.setPositiveButton(R.string.ok, (dialog, i) -> dialog.dismiss());
       builder.show();

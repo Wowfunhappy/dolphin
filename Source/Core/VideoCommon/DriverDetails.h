@@ -43,6 +43,7 @@ enum Vendor
   VENDOR_TEGRA,
   VENDOR_VIVANTE,
   VENDOR_MESA,
+  VENDOR_APPLE,
   VENDOR_UNKNOWN
 };
 
@@ -301,14 +302,6 @@ enum Bug
   // Ended version: -1
   BUG_BROKEN_VECTOR_BITWISE_AND,
 
-  // BUG: Atomic writes to different fields or array elements of an SSBO have no effect, only
-  // writing to the first field/element works. This causes bounding box emulation to give garbage
-  // values under OpenGL.
-  // Affected devices: AMD (Windows)
-  // Started version: -1
-  // Ended version: -1
-  BUG_BROKEN_SSBO_FIELD_ATOMICS,
-
   // BUG: Accessing gl_SubgroupInvocationID causes the Metal shader compiler to crash.
   // Affected devices: AMD (macOS)
   // Started version: -1
@@ -318,7 +311,15 @@ enum Bug
   // BUG: Multi-threaded shader pre-compilation sometimes crashes
   // Used primarily in Videoconfig.cpp's GetNumAutoShaderPreCompilerThreads()
   // refer to https://github.com/dolphin-emu/dolphin/pull/9414 for initial validation coverage
-  BUG_BROKEN_MULTITHREADED_SHADER_PRECOMPILATION
+  BUG_BROKEN_MULTITHREADED_SHADER_PRECOMPILATION,
+
+  // BUG: Some driver and Apple Silicon GPU combinations have problems with fragment discard when
+  // early depth test is enabled. Discarded fragments may appear corrupted (Super Mario Sunshine,
+  // Sonic Adventure 2: Battle, Phantasy Star Online Epsiodes 1 & 2, etc).
+  // Affected devices: Apple Silicon GPUs of Apple family 4 and newer.
+  // Started version: -1
+  // Ended version: -1
+  BUG_BROKEN_DISCARD_WITH_EARLY_Z,
 };
 
 // Initializes our internal vendor, device family, and driver version

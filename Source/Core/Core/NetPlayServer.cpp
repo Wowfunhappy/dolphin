@@ -1363,7 +1363,7 @@ bool NetPlayServer::SetupNetSettings()
   settings.m_Fastmem = Config::Get(Config::MAIN_FASTMEM);
   settings.m_SkipIPL = Config::Get(Config::MAIN_SKIP_IPL) || !DoAllPlayersHaveIPLDump();
   settings.m_LoadIPLDump = Config::Get(Config::SESSION_LOAD_IPL_DUMP) && DoAllPlayersHaveIPLDump();
-  settings.m_VertexRounding = Config::Get(Config::GFX_HACK_VERTEX_ROUDING);
+  settings.m_VertexRounding = Config::Get(Config::GFX_HACK_VERTEX_ROUNDING);
   settings.m_InternalResolution = Config::Get(Config::GFX_EFB_SCALE);
   settings.m_EFBScaledCopy = Config::Get(Config::GFX_HACK_COPY_EFB_SCALED);
   settings.m_FastDepthCalc = Config::Get(Config::GFX_FAST_DEPTH_CALC);
@@ -1470,8 +1470,8 @@ bool NetPlayServer::StartGame()
 
   const sf::Uint64 initial_rtc = GetInitialNetPlayRTC();
 
-  const std::string region = SConfig::GetDirectoryForRegion(
-      SConfig::ToGameCubeRegion(m_dialog->FindGameFile(m_selected_game_identifier)->GetRegion()));
+  const std::string region = Config::GetDirectoryForRegion(
+      Config::ToGameCubeRegion(m_dialog->FindGameFile(m_selected_game_identifier)->GetRegion()));
 
   // sync GC SRAM with clients
   if (!g_SRAM_netplay_initialized)
@@ -1665,8 +1665,8 @@ bool NetPlayServer::SyncSaveData()
   if (save_count == 0)
     return true;
 
-  const std::string region =
-      SConfig::GetDirectoryForRegion(SConfig::ToGameCubeRegion(game->GetRegion()));
+  const auto game_region = game->GetRegion();
+  const std::string region = Config::GetDirectoryForRegion(Config::ToGameCubeRegion(game_region));
 
   for (ExpansionInterface::Slot slot : ExpansionInterface::MEMCARD_SLOTS)
   {
@@ -1674,17 +1674,12 @@ bool NetPlayServer::SyncSaveData()
 
     if (m_settings.m_EXIDevice[slot] == ExpansionInterface::EXIDeviceType::MemoryCard)
     {
-      std::string path = Config::Get(Config::GetInfoForMemcardPath(slot));
-
-      MemoryCard::CheckPath(path, region, slot);
-
       const int size_override = m_settings.m_MemcardSizeOverride;
-      if (size_override >= 0 && size_override <= 4)
-      {
-        path.insert(path.find_last_of('.'),
-                    fmt::format(".{}", Memcard::MbitToFreeBlocks(Memcard::MBIT_SIZE_MEMORY_CARD_59
-                                                                 << size_override)));
-      }
+      const u16 card_size_mbits =
+          size_override >= 0 && size_override <= 4 ?
+              static_cast<u16>(Memcard::MBIT_SIZE_MEMORY_CARD_59 << size_override) :
+              Memcard::MBIT_SIZE_MEMORY_CARD_2043;
+      const std::string path = Config::GetMemcardPath(slot, game_region, card_size_mbits);
 
       sf::Packet pac;
       pac << MessageID::SyncSaveData;

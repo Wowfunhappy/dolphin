@@ -38,6 +38,7 @@ static bool bProjectionChanged;
 static bool bViewportChanged;
 static bool bTexMtxInfoChanged;
 static bool bLightingConfigChanged;
+static bool bProjectionGraphicsModChange;
 static BitSet32 nMaterialsChanged;
 static std::array<int, 2> nTransformMatricesChanged;      // min,max
 static std::array<int, 2> nNormalMatricesChanged;         // min,max
@@ -48,55 +49,6 @@ static Common::Matrix44 s_viewportCorrection;
 
 VertexShaderConstants VertexShaderManager::constants;
 bool VertexShaderManager::dirty;
-
-// Viewport correction:
-// In D3D, the viewport rectangle must fit within the render target.
-// Say you want a viewport at (ix, iy) with size (iw, ih),
-// but your viewport must be clamped at (ax, ay) with size (aw, ah).
-// Just multiply the projection matrix with the following to get the same
-// effect:
-// [   (iw/aw)         0     0    ((iw - 2*(ax-ix)) / aw - 1)   ]
-// [         0   (ih/ah)     0   ((-ih + 2*(ay-iy)) / ah + 1)   ]
-// [         0         0     1                              0   ]
-// [         0         0     0                              1   ]
-static void ViewportCorrectionMatrix(Common::Matrix44& result)
-{
-  int scissorXOff = bpmem.scissorOffset.x * 2;
-  int scissorYOff = bpmem.scissorOffset.y * 2;
-
-  // TODO: ceil, floor or just cast to int?
-  // TODO: Directly use the floats instead of rounding them?
-  float intendedX = xfmem.viewport.xOrig - xfmem.viewport.wd - scissorXOff;
-  float intendedY = xfmem.viewport.yOrig + xfmem.viewport.ht - scissorYOff;
-  float intendedWd = 2.0f * xfmem.viewport.wd;
-  float intendedHt = -2.0f * xfmem.viewport.ht;
-
-  if (intendedWd < 0.f)
-  {
-    intendedX += intendedWd;
-    intendedWd = -intendedWd;
-  }
-  if (intendedHt < 0.f)
-  {
-    intendedY += intendedHt;
-    intendedHt = -intendedHt;
-  }
-
-  // fit to EFB size
-  float X = (intendedX >= 0.f) ? intendedX : 0.f;
-  float Y = (intendedY >= 0.f) ? intendedY : 0.f;
-  float Wd = (X + intendedWd <= EFB_WIDTH) ? intendedWd : (EFB_WIDTH - X);
-  float Ht = (Y + intendedHt <= EFB_HEIGHT) ? intendedHt : (EFB_HEIGHT - Y);
-
-  result = Common::Matrix44::Identity();
-  if (Wd == 0 || Ht == 0)
-    return;
-
-  result.data[4 * 0 + 0] = intendedWd / Wd;
-  result.data[4 * 0 + 3] = (intendedWd - 2.f * (X - intendedX)) / Wd - 1.f;
-  result.data[4 * 1 + 1] = intendedHt / Ht;
-  result.data[4 * 1 + 3] = (-intendedHt + 2.f * (Y - intendedY)) / Ht + 1.f;
-}
 
 void VertexShaderManager::Init()
 {
@@ -112,6 +64,7 @@ void VertexShaderManager::Init()
   bViewportChanged = false;
   bTexMtxInfoChanged = false;
   bLightingConfigChanged = false;
+  bProjectionGraphicsModChange = false;
 
   std::memset(static_cast<void*>(&xfmem), 0, sizeof(xfmem));
   constants = {};
@@ -134,7 +87,7 @@ void VertexShaderManager::Dirty()
 
 // Syncs the shader constant buffers with xfmem
 // TODO: A cleaner way to control the matrices without making a mess in the parameters field
-void VertexShaderManager::SetConstants()
+void VertexShaderManager::SetConstants(const std::vector<std::string>& textures)
 {
   if (constants.missing_color_hex != g_ActiveConfig.iMissingColorValue)
   {
@@ -303,7 +256,7 @@ void VertexShaderManager::SetConstants()
     // NOTE: If we ever emulate antialiasing, the sample locations set by
     // BP registers 0x01-0x04 need to be considered here.
     const float pixel_center_correction = 7.0f / 12.0f - 0.5f;
-    const bool bUseVertexRounding = g_ActiveConfig.bVertexRounding && g_ActiveConfig.iEFBScale != 1;
+    const bool bUseVertexRounding = g_ActiveConfig.UseVertexRounding();
     const float viewport_width = bUseVertexRounding ?
                                      (2.f * xfmem.viewport.wd) :
                                      g_renderer->EFBToScaledXf(2.f * xfmem.viewport.wd);
@@ -347,19 +300,34 @@ void VertexShaderManager::SetConstants()
     }
 
     dirty = true;
-    BPFunctions::SetViewport();
+    BPFunctions::SetScissorAndViewport();
+    g_stats.AddScissorRect();
+  }
 
-    // Update projection if the viewport isn't 1:1 useable
-    if (!g_ActiveConfig.backend_info.bSupportsOversizedViewports)
+  std::vector<GraphicsModAction*> projection_actions;
+  if (g_ActiveConfig.bGraphicMods)
+  {
+    for (const auto action :
+         g_renderer->GetGraphicsModManager().GetProjectionActions(xfmem.projection.type))
     {
-      ViewportCorrectionMatrix(s_viewportCorrection);
-      bProjectionChanged = true;
+      projection_actions.push_back(action);
+    }
+
+    for (const auto& texture : textures)
+    {
+      for (const auto action : g_renderer->GetGraphicsModManager().GetProjectionTextureActions(
+               xfmem.projection.type, texture))
+      {
+        projection_actions.push_back(action);
+      }
     }
   }
 
-  if (bProjectionChanged || g_freelook_camera.GetController()->IsDirty())
+  if (bProjectionChanged || g_freelook_camera.GetController()->IsDirty() ||
+      !projection_actions.empty() || bProjectionGraphicsModChange)
   {
     bProjectionChanged = false;
+    bProjectionGraphicsModChange = !projection_actions.empty();
 
     const auto& rawProjection = xfmem.projection.rawProjection;
 
@@ -438,6 +406,11 @@ void VertexShaderManager::SetConstants()
 
     if (g_freelook_camera.IsActive() && xfmem.projection.type == ProjectionType::Perspective)
       corrected_matrix *= g_freelook_camera.GetView();
+
+    for (auto action : projection_actions)
+    {
+      action->OnProjection(&corrected_matrix);
+    }
 
     memcpy(constants.projection.data(), corrected_matrix.data.data(), 4 * sizeof(float4));
 
@@ -690,7 +663,7 @@ void VertexShaderManager::DoState(PointerWrap& p)
 
   p.Do(constants);
 
-  if (p.GetMode() == PointerWrap::MODE_READ)
+  if (p.IsReadMode())
   {
     Dirty();
   }

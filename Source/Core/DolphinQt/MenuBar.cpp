@@ -218,7 +218,7 @@ void MenuBar::AddFileMenu()
   file_menu->addSeparator();
 
   m_exit_action = file_menu->addAction(tr("E&xit"), this, &MenuBar::Exit);
-  m_exit_action->setShortcuts({QKeySequence::Quit, QKeySequence(Qt::ALT + Qt::Key_F4)});
+  m_exit_action->setShortcuts({QKeySequence::Quit, QKeySequence(Qt::ALT | Qt::Key_F4)});
 }
 
 void MenuBar::AddToolsMenu()
@@ -556,9 +556,10 @@ void MenuBar::AddOptionsMenu()
 
 void MenuBar::InstallUpdateManually()
 {
-  auto* updater =
-      new Updater(this->parentWidget(), Config::Get(Config::MAIN_AUTOUPDATE_UPDATE_TRACK),
-                  Config::Get(Config::MAIN_AUTOUPDATE_HASH_OVERRIDE));
+  const std::string autoupdate_track = Config::Get(Config::MAIN_AUTOUPDATE_UPDATE_TRACK);
+  const std::string manual_track = autoupdate_track.empty() ? "dev" : autoupdate_track;
+  auto* const updater = new Updater(this->parentWidget(), manual_track,
+                                    Config::Get(Config::MAIN_AUTOUPDATE_HASH_OVERRIDE));
 
   if (!updater->CheckForUpdate())
   {
@@ -1000,12 +1001,9 @@ void MenuBar::UpdateToolsMenu(bool emulation_started)
 {
   m_boot_sysmenu->setEnabled(!emulation_started);
   m_perform_online_update_menu->setEnabled(!emulation_started);
-  m_ntscj_ipl->setEnabled(!emulation_started &&
-                          File::Exists(SConfig::GetInstance().GetBootROMPath(JAP_DIR)));
-  m_ntscu_ipl->setEnabled(!emulation_started &&
-                          File::Exists(SConfig::GetInstance().GetBootROMPath(USA_DIR)));
-  m_pal_ipl->setEnabled(!emulation_started &&
-                        File::Exists(SConfig::GetInstance().GetBootROMPath(EUR_DIR)));
+  m_ntscj_ipl->setEnabled(!emulation_started && File::Exists(Config::GetBootROMPath(JAP_DIR)));
+  m_ntscu_ipl->setEnabled(!emulation_started && File::Exists(Config::GetBootROMPath(USA_DIR)));
+  m_pal_ipl->setEnabled(!emulation_started && File::Exists(Config::GetBootROMPath(EUR_DIR)));
   m_import_backup->setEnabled(!emulation_started);
   m_check_nand->setEnabled(!emulation_started);
 

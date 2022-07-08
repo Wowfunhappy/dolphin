@@ -139,9 +139,9 @@ void SHADER::SetProgramBindings(bool is_compute)
     glBindAttribLocation(glprogid, SHADER_COLOR0_ATTRIB, "rawcolor0");
     glBindAttribLocation(glprogid, SHADER_COLOR1_ATTRIB, "rawcolor1");
 
-    glBindAttribLocation(glprogid, SHADER_NORM0_ATTRIB, "rawnorm0");
-    glBindAttribLocation(glprogid, SHADER_NORM1_ATTRIB, "rawnorm1");
-    glBindAttribLocation(glprogid, SHADER_NORM2_ATTRIB, "rawnorm2");
+    glBindAttribLocation(glprogid, SHADER_NORMAL_ATTRIB, "rawnormal");
+    glBindAttribLocation(glprogid, SHADER_TANGENT_ATTRIB, "rawtangent");
+    glBindAttribLocation(glprogid, SHADER_BINORMAL_ATTRIB, "rawbinormal");
   }
 
   for (int i = 0; i < 8; i++)
@@ -790,7 +790,7 @@ void ProgramShaderCache::CreateHeader()
           "#define UBO_BINDING(packing, x) layout(packing, binding = x)\n"
           "#define SAMPLER_BINDING(x) layout(binding = x)\n"
           "#define TEXEL_BUFFER_BINDING(x) layout(binding = x)\n"
-          "#define SSBO_BINDING(x) layout(binding = x)\n"
+          "#define SSBO_BINDING(x) layout(std430, binding = x)\n"
           "#define IMAGE_BINDING(format, x) layout(format, binding = x)\n" :
           "#define ATTRIBUTE_LOCATION(x)\n"
           "#define FRAGMENT_OUTPUT_LOCATION(x)\n"
@@ -798,7 +798,7 @@ void ProgramShaderCache::CreateHeader()
           "#define UBO_BINDING(packing, x) layout(packing)\n"
           "#define SAMPLER_BINDING(x)\n"
           "#define TEXEL_BUFFER_BINDING(x)\n"
-          "#define SSBO_BINDING(x)\n"
+          "#define SSBO_BINDING(x) layout(std430)\n"
           "#define IMAGE_BINDING(format, x) layout(format)\n",
       // Input/output blocks are matched by name during program linking
       "#define VARYING_LOCATION(x)\n",

@@ -21,13 +21,16 @@ extern "C" {
 #include <libavutil/log.h>
 #include <libavutil/mathematics.h>
 #include <libavutil/opt.h>
+#include <libavutil/pixdesc.h>
 #include <libswscale/swscale.h>
 }
 
 #include "Common/ChunkFile.h"
 #include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
+#include "Common/Logging/LogManager.h"
 #include "Common/MsgHandler.h"
+#include "Common/StringUtil.h"
 
 #include "Core/Config/MainSettings.h"
 #include "Core/ConfigManager.h"
@@ -94,7 +97,17 @@ void InitAVCodec()
         // keep libav debug messages visible in release build of dolphin
         log_level = Common::Log::LogLevel::LINFO;
 
-      GENERIC_LOG(Common::Log::LogType::FRAMEDUMP, log_level, fmt, vl);
+      // Don't perform this formatting if the log level is disabled
+      auto* log_manager = Common::Log::LogManager::GetInstance();
+      if (log_manager != nullptr &&
+          log_manager->IsEnabled(Common::Log::LogType::FRAMEDUMP, log_level))
+      {
+        constexpr size_t MAX_MSGLEN = 1024;
+        char message[MAX_MSGLEN];
+        CharArrayFromFormatV(message, MAX_MSGLEN, fmt, vl);
+
+        GENERIC_LOG_FMT(Common::Log::LogType::FRAMEDUMP, log_level, "{}", message);
+      }
     });
 
     // TODO: We never call avformat_network_deinit.
@@ -249,19 +262,30 @@ bool FrameDump::CreateVideoFile()
   m_context->codec->gop_size = 1;
   m_context->codec->level = 1;
 
-  if (m_context->codec->codec_id == AV_CODEC_ID_FFV1)
+  AVPixelFormat pix_fmt = AV_PIX_FMT_NONE;
+
+  const std::string& pixel_format_string = g_Config.sDumpPixelFormat;
+  if (!pixel_format_string.empty())
   {
-    m_context->codec->pix_fmt = AV_PIX_FMT_BGR0;
+    pix_fmt = av_get_pix_fmt(pixel_format_string.c_str());
+    if (pix_fmt == AV_PIX_FMT_NONE)
+      WARN_LOG_FMT(FRAMEDUMP, "Invalid pixel format {}", pixel_format_string);
   }
-  else if (m_context->codec->codec_id == AV_CODEC_ID_UTVIDEO)
+
+  if (pix_fmt == AV_PIX_FMT_NONE)
   {
-    m_context->codec->pix_fmt = AV_PIX_FMT_GBRP;
+    if (m_context->codec->codec_id == AV_CODEC_ID_FFV1)
+      pix_fmt = AV_PIX_FMT_BGR0;
+    else if (m_context->codec->codec_id == AV_CODEC_ID_UTVIDEO)
+      pix_fmt = AV_PIX_FMT_GBRP;
+    else
+      pix_fmt = AV_PIX_FMT_YUV420P;
+  }
+
+  m_context->codec->pix_fmt = pix_fmt;
+
+  if (m_context->codec->codec_id == AV_CODEC_ID_UTVIDEO)
     av_opt_set_int(m_context->codec->priv_data, "pred", 3, 0);  // median
-  }
-  else
-  {
-    m_context->codec->pix_fmt = AV_PIX_FMT_YUV420P;
-  }
 
   if (output_format->flags & AVFMT_GLOBALHEADER)
     m_context->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
@@ -458,7 +482,7 @@ void FrameDump::CloseVideoFile()
 
 void FrameDump::DoState(PointerWrap& p)
 {
-  if (p.GetMode() == PointerWrap::MODE_READ)
+  if (p.IsReadMode())
     ++m_savestate_index;
 }
 
