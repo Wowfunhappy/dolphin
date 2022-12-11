@@ -659,6 +659,10 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
     glEnable(GL_PROGRAM_POINT_SIZE);
   }
 
+  // Supported by all GS-supporting ES and 4.3+
+  g_Config.backend_info.bSupportsGLLayerInFS = g_Config.backend_info.bSupportsGeometryShaders &&
+                                               g_ogl_config.eSupportedGLSLVersion >= Glsl430;
+
   g_Config.backend_info.bSupportsBBox = g_Config.backend_info.bSupportsFragmentStoresAndAtomics;
 
   // Either method can do early-z tests. See PixelShaderGen for details.
