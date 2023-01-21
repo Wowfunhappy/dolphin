@@ -164,7 +164,12 @@ void Write_F64(double var, u32 address);
 
 void DMA_LCToMemory(u32 mem_address, u32 cache_address, u32 num_blocks);
 void DMA_MemoryToLC(u32 cache_address, u32 mem_address, u32 num_blocks);
-void ClearCacheLine(u32 address);  // Zeroes 32 bytes; address should be 32-byte-aligned
+
+void ClearDCacheLine(u32 address);  // Zeroes 32 bytes; address should be 32-byte-aligned
+void StoreDCacheLine(u32 address);
+void InvalidateDCacheLine(u32 address);
+void FlushDCacheLine(u32 address);
+void TouchDCacheLine(u32 address, bool store);
 
 // TLB functions
 void SDRUpdated();
@@ -197,11 +202,12 @@ TranslateResult JitCache_TranslateAddress(u32 address);
 
 constexpr int BAT_INDEX_SHIFT = 17;
 constexpr u32 BAT_PAGE_SIZE = 1 << BAT_INDEX_SHIFT;
+constexpr u32 BAT_PAGE_COUNT = 1 << (32 - BAT_INDEX_SHIFT);
 constexpr u32 BAT_MAPPED_BIT = 0x1;
 constexpr u32 BAT_PHYSICAL_BIT = 0x2;
 constexpr u32 BAT_WI_BIT = 0x4;
 constexpr u32 BAT_RESULT_MASK = UINT32_C(~0x7);
-using BatTable = std::array<u32, 1 << (32 - BAT_INDEX_SHIFT)>;  // 128 KB
+using BatTable = std::array<u32, BAT_PAGE_COUNT>;  // 128 KB
 extern BatTable ibat_table;
 extern BatTable dbat_table;
 inline bool TranslateBatAddess(const BatTable& bat_table, u32* address, bool* wi)

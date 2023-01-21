@@ -13,8 +13,6 @@ add_library(discio
   DiscScrubber.h
   DiscUtils.cpp
   DiscUtils.h
-  DriveBlob.cpp
-  DriveBlob.h
   Enums.cpp
   Enums.h
   FileBlob.cpp
@@ -30,6 +28,8 @@ add_library(discio
   MultithreadedCompressor.h
   NANDImporter.cpp
   NANDImporter.h
+  NFSBlob.cpp
+  NFSBlob.h
   RiivolutionParser.cpp
   RiivolutionParser.h
   RiivolutionPatcher.cpp

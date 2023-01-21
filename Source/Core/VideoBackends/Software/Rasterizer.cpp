@@ -108,8 +108,6 @@ static std::vector<BPFunctions::ScissorRect> scissors;
 
 void Init()
 {
-  tev.Init();
-
   // The other slopes are set each for each primitive drawn, but zfreeze means that the z slope
   // needs to be set to an (untested) default value.
   ZSlope = Slope();
@@ -142,9 +140,9 @@ static inline int iround(float x)
   return t;
 }
 
-void SetTevReg(int reg, int comp, s16 color)
+void SetTevKonstColors()
 {
-  tev.SetRegColor(reg, comp, color);
+  tev.SetKonstColors();
 }
 
 static void Draw(s32 x, s32 y, s32 xi, s32 yi)
@@ -153,7 +151,7 @@ static void Draw(s32 x, s32 y, s32 xi, s32 yi)
 
   s32 z = (s32)std::clamp<float>(ZSlope.GetValue(x, y), 0.0f, 16777215.0f);
 
-  if (bpmem.UseEarlyDepthTest())
+  if (bpmem.GetEmulatedZ() == EmulatedZ::Early)
   {
     // TODO: Test if perf regs are incremented even if test is disabled
     EfbInterface::IncPerfCounterQuadCount(PQ_ZCOMP_INPUT_ZCOMPLOC);
@@ -288,13 +286,10 @@ static void BuildBlock(s32 blockX, s32 blockY)
     }
   }
 
-  u32 indref = bpmem.tevindref.hex;
   for (unsigned int i = 0; i < bpmem.genMode.numindstages; i++)
   {
-    u32 texmap = indref & 3;
-    indref >>= 3;
-    u32 texcoord = indref & 3;
-    indref >>= 3;
+    u32 texmap = bpmem.tevindref.getTexMap(i);
+    u32 texcoord = bpmem.tevindref.getTexCoord(i);
 
     CalculateLOD(&rasterBlock.IndirectLod[i], &rasterBlock.IndirectLinear[i], texmap, texcoord);
   }

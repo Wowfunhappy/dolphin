@@ -12,6 +12,7 @@
 #include "Core/PowerPC/Interpreter/Interpreter_FPUtils.h"
 #include "Core/PowerPC/MMU.h"
 #include "Core/PowerPC/PowerPC.h"
+#include "Core/System.h"
 
 /*
 
@@ -238,18 +239,45 @@ void Interpreter::mfspr(UGeckoInstruction inst)
 
   case SPR_WPAR:
   {
-    // TODO: If wpar_empty ever is false, Paper Mario hangs. Strange.
-    // Maybe WPAR is automatically flushed after a certain amount of time?
-    bool wpar_empty = true;  // GPFifo::IsEmpty();
-    if (!wpar_empty)
-      rSPR(index) |= 1;  // BNE = buffer not empty
+    // The bottom, read-only bit checks if the buffer is not empty.
+    // GXRedirectWriteGatherPipe and GXRestoreWriteGatherPipe (used for display lists) wait for
+    // this bit to be cleared before writing to SPR_WPAR again (with a value of 0x0c00800 (aka
+    // GPFifo::GATHER_PIPE_PHYSICAL_ADDRESS)).
+    // Currently, we always treat the buffer as not empty, as the exact behavior is unclear
+    // (and games that use display lists will hang if the bit doesn't eventually become zero).
+    if (Core::System::GetInstance().GetGPFifo().IsBNE())
+      rSPR(index) |= 1;
     else
       rSPR(index) &= ~1;
   }
   break;
+
   case SPR_XER:
     rSPR(index) = PowerPC::GetXER().Hex;
     break;
+
+  case SPR_UPMC1:
+    rSPR(index) = rSPR(SPR_PMC1);
+    break;
+
+  case SPR_UPMC2:
+    rSPR(index) = rSPR(SPR_PMC2);
+    break;
+
+  case SPR_UPMC3:
+    rSPR(index) = rSPR(SPR_PMC3);
+    break;
+
+  case SPR_UPMC4:
+    rSPR(index) = rSPR(SPR_PMC4);
+    break;
+
+  case SPR_IABR:
+    // A strange quirk: reading back this register on hardware will always have the TE (Translation
+    // enabled) bit set to 0 (despite the bit appearing to function normally when set). This does
+    // not apply to the DABR.
+    rGPR[inst.RD] = rSPR(index) & ~1;
+    return;
   }
   rGPR[inst.RD] = rSPR(index);
 }
@@ -341,8 +369,9 @@ void Interpreter::mtspr(UGeckoInstruction inst)
     break;
 
   case SPR_WPAR:
-    ASSERT_MSG(POWERPC, rGPR[inst.RD] == 0x0C008000, "Gather pipe @ {:08x}", PC);
-    GPFifo::ResetGatherPipe();
+    ASSERT_MSG(POWERPC, rSPR(SPR_WPAR) == GPFifo::GATHER_PIPE_PHYSICAL_ADDRESS,
+               "Gather pipe changed to unexpected address {:08x} @ PC {:08x}", rSPR(SPR_WPAR), PC);
+    Core::System::GetInstance().GetGPFifo().ResetGatherPipe();
     break;
 
   // Graphics Quantization Registers

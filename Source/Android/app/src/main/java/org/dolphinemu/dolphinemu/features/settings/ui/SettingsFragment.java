@@ -10,14 +10,19 @@ import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.divider.MaterialDividerItemDecoration;
+
 import org.dolphinemu.dolphinemu.R;
+import org.dolphinemu.dolphinemu.databinding.FragmentSettingsBinding;
 import org.dolphinemu.dolphinemu.features.settings.model.Settings;
 import org.dolphinemu.dolphinemu.features.settings.model.view.SettingsItem;
-import org.dolphinemu.dolphinemu.ui.DividerItemDecoration;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -44,6 +49,7 @@ public final class SettingsFragment extends Fragment implements SettingsFragment
     titles.put(MenuTag.CONFIG_AUDIO, R.string.audio_submenu);
     titles.put(MenuTag.CONFIG_PATHS, R.string.paths_submenu);
     titles.put(MenuTag.CONFIG_GAME_CUBE, R.string.gamecube_submenu);
+    titles.put(MenuTag.CONFIG_SERIALPORT1, R.string.serialport1_submenu);
     titles.put(MenuTag.CONFIG_WII, R.string.wii_submenu);
     titles.put(MenuTag.CONFIG_ADVANCED, R.string.advanced_submenu);
     titles.put(MenuTag.DEBUG, R.string.debug_submenu);
@@ -51,6 +57,7 @@ public final class SettingsFragment extends Fragment implements SettingsFragment
     titles.put(MenuTag.ENHANCEMENTS, R.string.enhancements_submenu);
     titles.put(MenuTag.STEREOSCOPY, R.string.stereoscopy_submenu);
     titles.put(MenuTag.HACKS, R.string.hacks_submenu);
+    titles.put(MenuTag.STATISTICS, R.string.statistics_submenu);
     titles.put(MenuTag.ADVANCED_GRAPHICS, R.string.advanced_graphics_submenu);
     titles.put(MenuTag.CONFIG_LOG, R.string.log_submenu);
     titles.put(MenuTag.GCPAD_TYPE, R.string.gcpad_settings);
@@ -69,6 +76,8 @@ public final class SettingsFragment extends Fragment implements SettingsFragment
     titles.put(MenuTag.WIIMOTE_EXTENSION_3, R.string.wiimote_extension_6);
     titles.put(MenuTag.WIIMOTE_EXTENSION_4, R.string.wiimote_extension_7);
   }
+
+  private FragmentSettingsBinding mBinding;
 
   public static Fragment newInstance(MenuTag menuTag, String gameId, Bundle extras)
   {
@@ -110,12 +119,13 @@ public final class SettingsFragment extends Fragment implements SettingsFragment
     mPresenter.onCreate(menuTag, gameId, args);
   }
 
-  @Nullable
+  @NonNull
   @Override
-  public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container,
+  public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
           @Nullable Bundle savedInstanceState)
   {
-    return inflater.inflate(R.layout.fragment_settings, container, false);
+    mBinding = FragmentSettingsBinding.inflate(inflater, container, false);
+    return mBinding.getRoot();
   }
 
   @Override
@@ -126,19 +136,32 @@ public final class SettingsFragment extends Fragment implements SettingsFragment
 
     if (titles.containsKey(menuTag))
     {
-      getActivity().setTitle(titles.get(menuTag));
+      mActivity.setToolbarTitle(getString(titles.get(menuTag)));
     }
 
     LinearLayoutManager manager = new LinearLayoutManager(getActivity());
 
-    RecyclerView recyclerView = view.findViewById(R.id.list_settings);
+    RecyclerView recyclerView = mBinding.listSettings;
 
     recyclerView.setAdapter(mAdapter);
     recyclerView.setLayoutManager(manager);
-    recyclerView.addItemDecoration(new DividerItemDecoration(requireActivity(), null));
+
+    MaterialDividerItemDecoration divider =
+            new MaterialDividerItemDecoration(requireActivity(), LinearLayoutManager.VERTICAL);
+    divider.setLastItemDecorated(false);
+    recyclerView.addItemDecoration(divider);
+
+    setInsets();
 
     SettingsActivityView activity = (SettingsActivityView) getActivity();
     mPresenter.onViewCreated(menuTag, activity.getSettings());
+  }
+
+  @Override
+  public void onDestroyView()
+  {
+    super.onDestroyView();
+    mBinding = null;
   }
 
   @Override
@@ -203,6 +226,12 @@ public final class SettingsFragment extends Fragment implements SettingsFragment
   }
 
   @Override
+  public void onSerialPort1SettingChanged(MenuTag menuTag, int value)
+  {
+    mActivity.onSerialPort1SettingChanged(menuTag, value);
+  }
+
+  @Override
   public void onGcPadSettingChanged(MenuTag menuTag, int value)
   {
     mActivity.onGcPadSettingChanged(menuTag, value);
@@ -218,5 +247,16 @@ public final class SettingsFragment extends Fragment implements SettingsFragment
   public void onExtensionSettingChanged(MenuTag menuTag, int value)
   {
     mActivity.onExtensionSettingChanged(menuTag, value);
+  }
+
+  private void setInsets()
+  {
+    ViewCompat.setOnApplyWindowInsetsListener(mBinding.listSettings, (v, windowInsets) ->
+    {
+      Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
+      v.setPadding(0, 0, 0,
+              insets.bottom + getResources().getDimensionPixelSize(R.dimen.spacing_list));
+      return windowInsets;
+    });
   }
 }

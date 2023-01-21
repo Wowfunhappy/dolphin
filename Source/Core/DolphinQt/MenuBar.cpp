@@ -43,6 +43,7 @@
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/PowerPC/SignatureDB/SignatureDB.h"
 #include "Core/State.h"
+#include "Core/System.h"
 #include "Core/TitleDatabase.h"
 #include "Core/WiiUtils.h"
 
@@ -52,6 +53,7 @@
 
 #include "DolphinQt/AboutDialog.h"
 #include "DolphinQt/Host.h"
+#include "DolphinQt/NANDRepairDialog.h"
 #include "DolphinQt/QtUtils/DolphinFileDialog.h"
 #include "DolphinQt/QtUtils/ModalMessageBox.h"
 #include "DolphinQt/QtUtils/ParallelProgressDialog.h"
@@ -85,7 +87,7 @@ MenuBar::MenuBar(QWidget* parent) : QMenuBar(parent)
   AddHelpMenu();
 
   connect(&Settings::Instance(), &Settings::EmulationStateChanged, this,
-          [=](Core::State state) { OnEmulationStateChanged(state); });
+          [=, this](Core::State state) { OnEmulationStateChanged(state); });
   connect(Host::GetInstance(), &Host::UpdateDisasmDialog, this,
           [this] { OnEmulationStateChanged(Core::GetState()); });
 
@@ -129,9 +131,6 @@ void MenuBar::OnEmulationStateChanged(Core::State state)
   }
   m_recording_play->setEnabled(m_game_selected && !running);
   m_recording_start->setEnabled((m_game_selected || running) && !Movie::IsPlayingInput());
-
-  // Options
-  m_controllers_action->setEnabled(NetPlay::IsNetPlayRunning() ? !running : true);
 
   // JIT
   m_jit_interpreter_core->setEnabled(running);
@@ -190,19 +189,6 @@ void MenuBar::OnDebugModeToggled(bool enabled)
   }
 }
 
-void MenuBar::AddDVDBackupMenu(QMenu* file_menu)
-{
-  m_backup_menu = file_menu->addMenu(tr("&Boot from DVD Backup"));
-
-  const std::vector<std::string> drives = Common::GetCDDevices();
-  // Windows Limitation of 24 character drives
-  for (size_t i = 0; i < drives.size() && i < 24; i++)
-  {
-    auto drive = QString::fromStdString(drives[i]);
-    m_backup_menu->addAction(drive, this, [this, drive] { emit BootDVDBackup(drive); });
-  }
-}
-
 void MenuBar::AddFileMenu()
 {
   QMenu* file_menu = addMenu(tr("&File"));
@@ -213,7 +199,10 @@ void MenuBar::AddFileMenu()
   m_change_disc = file_menu->addAction(tr("Change &Disc..."), this, &MenuBar::ChangeDisc);
   m_eject_disc = file_menu->addAction(tr("&Eject Disc"), this, &MenuBar::EjectDisc);
 
-  AddDVDBackupMenu(file_menu);
+  file_menu->addSeparator();
+
+  m_open_user_folder =
+      file_menu->addAction(tr("Open &User Folder"), this, &MenuBar::OpenUserFolder);
 
   file_menu->addSeparator();
 
@@ -338,7 +327,7 @@ void MenuBar::AddStateLoadMenu(QMenu* emu_menu)
   {
     QAction* action = m_state_load_slots_menu->addAction(QString{});
 
-    connect(action, &QAction::triggered, this, [=]() { emit StateLoadSlotAt(i); });
+    connect(action, &QAction::triggered, this, [=, this]() { emit StateLoadSlotAt(i); });
   }
 }
 
@@ -355,7 +344,7 @@ void MenuBar::AddStateSaveMenu(QMenu* emu_menu)
   {
     QAction* action = m_state_save_slots_menu->addAction(QString{});
 
-    connect(action, &QAction::triggered, this, [=]() { emit StateSaveSlotAt(i); });
+    connect(action, &QAction::triggered, this, [=, this]() { emit StateSaveSlotAt(i); });
   }
 }
 
@@ -372,7 +361,7 @@ void MenuBar::AddStateSlotMenu(QMenu* emu_menu)
     if (Settings::Instance().GetStateSlot() == i)
       action->setChecked(true);
 
-    connect(action, &QAction::triggered, this, [=]() { emit SetStateSlot(i); });
+    connect(action, &QAction::triggered, this, [=, this]() { emit SetStateSlot(i); });
   }
 }
 
@@ -547,8 +536,7 @@ void MenuBar::AddOptionsMenu()
   m_reset_ignore_panic_handler = options_menu->addAction(tr("Reset Ignore Panic Handler"));
 
   connect(m_reset_ignore_panic_handler, &QAction::triggered, this, []() {
-    if (Config::Get(Config::MAIN_USE_PANIC_HANDLERS))
-      Common::SetEnableAlert(true);
+    Config::DeleteKey(Config::LayerType::CurrentRun, Config::MAIN_USE_PANIC_HANDLERS);
   });
 
   m_change_font = options_menu->addAction(tr("&Font..."), this, &MenuBar::ChangeDebugFont);
@@ -561,12 +549,7 @@ void MenuBar::InstallUpdateManually()
   auto* const updater = new Updater(this->parentWidget(), manual_track,
                                     Config::Get(Config::MAIN_AUTOUPDATE_HASH_OVERRIDE));
 
-  if (!updater->CheckForUpdate())
-  {
-    ModalMessageBox::information(
-        this, tr("Update"),
-        tr("You are running the latest version available on this update track."));
-  }
+  updater->CheckForUpdate();
 }
 
 void MenuBar::AddHelpMenu()
@@ -1013,10 +996,14 @@ void MenuBar::UpdateToolsMenu(bool emulation_started)
     const auto tmd = ios.GetES()->FindInstalledTMD(Titles::SYSTEM_MENU);
 
     const QString sysmenu_version =
-        tmd.IsValid() ?
-            QString::fromStdString(DiscIO::GetSysMenuVersionString(tmd.GetTitleVersion())) :
-            QString{};
-    m_boot_sysmenu->setText(tr("Load Wii System Menu %1").arg(sysmenu_version));
+        tmd.IsValid() ? QString::fromStdString(
+                            DiscIO::GetSysMenuVersionString(tmd.GetTitleVersion(), tmd.IsvWii())) :
+                        QString{};
+
+    const QString sysmenu_text = (tmd.IsValid() && tmd.IsvWii()) ? tr("Load vWii System Menu %1") :
+                                                                   tr("Load Wii System Menu %1");
+
+    m_boot_sysmenu->setText(sysmenu_text.arg(sysmenu_version));
 
     m_boot_sysmenu->setEnabled(tmd.IsValid());
 
@@ -1126,47 +1113,7 @@ void MenuBar::CheckNAND()
     return;
   }
 
-  QString message = tr("The emulated NAND is damaged. System titles such as the Wii Menu and "
-                       "the Wii Shop Channel may not work correctly.\n\n"
-                       "Do you want to try to repair the NAND?");
-  if (!result.titles_to_remove.empty())
-  {
-    std::string title_listings;
-    Core::TitleDatabase title_db;
-    const DiscIO::Language language = SConfig::GetInstance().GetCurrentLanguage(true);
-    for (const u64 title_id : result.titles_to_remove)
-    {
-      title_listings += StringFromFormat("%016" PRIx64, title_id);
-
-      const std::string database_name = title_db.GetChannelName(title_id, language);
-      if (!database_name.empty())
-      {
-        title_listings += " - " + database_name;
-      }
-      else
-      {
-        DiscIO::WiiSaveBanner banner(title_id);
-        if (banner.IsValid())
-        {
-          title_listings += " - " + banner.GetName();
-          const std::string description = banner.GetDescription();
-          if (!StripSpaces(description).empty())
-            title_listings += " - " + description;
-        }
-      }
-
-      title_listings += "\n";
-    }
-
-    message += tr("\n\nWARNING: Fixing this NAND requires the deletion of titles that have "
-                  "incomplete data on the NAND, including all associated save data. "
-                  "By continuing, the following title(s) will be removed:\n\n"
-                  "%1"
-                  "\nLaunching these titles may also fix the issues.")
-                   .arg(QString::fromStdString(title_listings));
-  }
-
-  if (ModalMessageBox::question(this, tr("NAND Check"), message) != QMessageBox::Yes)
+  if (NANDRepairDialog(result, this).exec() != QDialog::Accepted)
     return;
 
   if (WiiUtils::RepairNAND(ios))
@@ -1238,15 +1185,21 @@ void MenuBar::ClearSymbols()
 
 void MenuBar::GenerateSymbolsFromAddress()
 {
+  auto& system = Core::System::GetInstance();
+  auto& memory = system.GetMemory();
+
   PPCAnalyst::FindFunctions(Memory::MEM1_BASE_ADDR,
-                            Memory::MEM1_BASE_ADDR + Memory::GetRamSizeReal(), &g_symbolDB);
+                            Memory::MEM1_BASE_ADDR + memory.GetRamSizeReal(), &g_symbolDB);
   emit NotifySymbolsUpdated();
 }
 
 void MenuBar::GenerateSymbolsFromSignatureDB()
 {
+  auto& system = Core::System::GetInstance();
+  auto& memory = system.GetMemory();
+
   PPCAnalyst::FindFunctions(Memory::MEM1_BASE_ADDR,
-                            Memory::MEM1_BASE_ADDR + Memory::GetRamSizeReal(), &g_symbolDB);
+                            Memory::MEM1_BASE_ADDR + memory.GetRamSizeReal(), &g_symbolDB);
   SignatureDB db(SignatureDB::HandlerType::DSY);
   if (db.Load(File::GetSysDirectory() + TOTALDB))
   {
@@ -1453,6 +1406,9 @@ RSOVector MenuBar::DetectRSOModules(ParallelProgressDialog& progress)
 
 void MenuBar::LoadSymbolMap()
 {
+  auto& system = Core::System::GetInstance();
+  auto& memory = system.GetMemory();
+
   std::string existing_map_file, writable_map_file;
   bool map_exists = CBoot::FindMapFile(&existing_map_file, &writable_map_file);
 
@@ -1460,7 +1416,7 @@ void MenuBar::LoadSymbolMap()
   {
     g_symbolDB.Clear();
     PPCAnalyst::FindFunctions(Memory::MEM1_BASE_ADDR + 0x1300000,
-                              Memory::MEM1_BASE_ADDR + Memory::GetRamSizeReal(), &g_symbolDB);
+                              Memory::MEM1_BASE_ADDR + memory.GetRamSizeReal(), &g_symbolDB);
     SignatureDB db(SignatureDB::HandlerType::DSY);
     if (db.Load(File::GetSysDirectory() + TOTALDB))
       db.Apply(&g_symbolDB);
@@ -1701,8 +1657,11 @@ void MenuBar::SearchInstruction()
   if (!good)
     return;
 
+  auto& system = Core::System::GetInstance();
+  auto& memory = system.GetMemory();
+
   bool found = false;
-  for (u32 addr = Memory::MEM1_BASE_ADDR; addr < Memory::MEM1_BASE_ADDR + Memory::GetRamSizeReal();
+  for (u32 addr = Memory::MEM1_BASE_ADDR; addr < Memory::MEM1_BASE_ADDR + memory.GetRamSizeReal();
        addr += 4)
   {
     const auto ins_name =

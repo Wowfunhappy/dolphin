@@ -188,12 +188,23 @@ bool FramebufferManager::CreateEFBFramebuffer()
   // Create resolved textures if MSAA is on
   if (g_ActiveConfig.MultisamplingEnabled())
   {
+    u32 flags = 0;
+    if (!g_ActiveConfig.backend_info.bSupportsPartialMultisampleResolve)
+      flags |= AbstractTextureFlag_RenderTarget;
     m_efb_resolve_color_texture = g_renderer->CreateTexture(
         TextureConfig(efb_color_texture_config.width, efb_color_texture_config.height, 1,
-                      efb_color_texture_config.layers, 1, efb_color_texture_config.format, 0),
+                      efb_color_texture_config.layers, 1, efb_color_texture_config.format, flags),
         "EFB color resolve texture");
     if (!m_efb_resolve_color_texture)
       return false;
+
+    if (!g_ActiveConfig.backend_info.bSupportsPartialMultisampleResolve)
+    {
+      m_efb_color_resolve_framebuffer =
+          g_renderer->CreateFramebuffer(m_efb_resolve_color_texture.get(), nullptr);
+      if (!m_efb_color_resolve_framebuffer)
+        return false;
+    }
   }
 
   // We also need one to convert the D24S8 to R32F if that is being used (Adreno).
@@ -248,12 +259,27 @@ AbstractTexture* FramebufferManager::ResolveEFBColorTexture(const MathUtil::Rect
   clamped_region.ClampUL(0, 0, GetEFBWidth(), GetEFBHeight());
 
   // Resolve to our already-created texture.
-  for (u32 layer = 0; layer < GetEFBLayers(); layer++)
+  if (g_ActiveConfig.backend_info.bSupportsPartialMultisampleResolve)
   {
-    m_efb_resolve_color_texture->ResolveFromTexture(m_efb_color_texture.get(), clamped_region,
-                                                    layer, 0);
+    for (u32 layer = 0; layer < GetEFBLayers(); layer++)
+    {
+      m_efb_resolve_color_texture->ResolveFromTexture(m_efb_color_texture.get(), clamped_region,
+                                                      layer, 0);
+    }
   }
-
+  else
+  {
+    m_efb_color_texture->FinishedRendering();
+    g_renderer->BeginUtilityDrawing();
+    g_renderer->SetAndDiscardFramebuffer(m_efb_color_resolve_framebuffer.get());
+    g_renderer->SetPipeline(m_efb_color_resolve_pipeline.get());
+    g_renderer->SetTexture(0, m_efb_color_texture.get());
+    g_renderer->SetSamplerState(0, RenderState::GetPointSamplerState());
+    g_renderer->SetViewportAndScissor(clamped_region);
+    g_renderer->Draw(0, 3);
+    m_efb_resolve_color_texture->FinishedRendering();
+    g_renderer->EndUtilityDrawing();
+  }
   m_efb_resolve_color_texture->FinishedRendering();
   return m_efb_resolve_color_texture.get();
 }
@@ -354,26 +380,26 @@ bool FramebufferManager::IsUsingTiledEFBCache() const
 bool FramebufferManager::IsEFBCacheTilePresent(bool depth, u32 x, u32 y, u32* tile_index) const
 {
   const EFBCacheData& data = depth ? m_efb_depth_cache : m_efb_color_cache;
-  if (m_efb_cache_tile_size == 0)
+  if (!IsUsingTiledEFBCache())
   {
     *tile_index = 0;
-    return data.valid;
   }
   else
   {
-    *tile_index =
-        ((y / m_efb_cache_tile_size) * m_efb_cache_tiles_wide) + (x / m_efb_cache_tile_size);
-    return data.valid && data.tiles[*tile_index];
+    const u32 tile_x = x / m_efb_cache_tile_size;
+    const u32 tile_y = y / m_efb_cache_tile_size;
+    *tile_index = (tile_y * m_efb_cache_tile_row_stride) + tile_x;
   }
+  return data.tiles[*tile_index].present;
 }
 
 MathUtil::Rectangle<int> FramebufferManager::GetEFBCacheTileRect(u32 tile_index) const
 {
-  if (m_efb_cache_tile_size == 0)
+  if (!IsUsingTiledEFBCache())
     return MathUtil::Rectangle<int>(0, 0, EFB_WIDTH, EFB_HEIGHT);
 
-  const u32 tile_y = tile_index / m_efb_cache_tiles_wide;
-  const u32 tile_x = tile_index % m_efb_cache_tiles_wide;
+  const u32 tile_y = tile_index / m_efb_cache_tile_row_stride;
+  const u32 tile_x = tile_index % m_efb_cache_tile_row_stride;
   const u32 start_y = tile_y * m_efb_cache_tile_size;
   const u32 start_x = tile_x * m_efb_cache_tile_size;
   return MathUtil::Rectangle<int>(
@@ -391,6 +417,14 @@ u32 FramebufferManager::PeekEFBColor(u32 x, u32 y)
   if (!IsEFBCacheTilePresent(false, x, y, &tile_index))
     PopulateEFBCache(false, tile_index);
 
+  m_efb_color_cache.tiles[tile_index].frame_access_mask |= 1;
+
+  if (m_efb_color_cache.needs_flush)
+  {
+    m_efb_color_cache.readback_texture->Flush();
+    m_efb_color_cache.needs_flush = false;
+  }
+
   u32 value;
   m_efb_color_cache.readback_texture->ReadTexel(x, y, &value);
   return value;
@@ -405,6 +439,14 @@ float FramebufferManager::PeekEFBDepth(u32 x, u32 y)
   u32 tile_index;
   if (!IsEFBCacheTilePresent(true, x, y, &tile_index))
     PopulateEFBCache(true, tile_index);
+
+  m_efb_depth_cache.tiles[tile_index].frame_access_mask |= 1;
+
+  if (m_efb_depth_cache.needs_flush)
+  {
+    m_efb_depth_cache.readback_texture->Flush();
+    m_efb_depth_cache.needs_flush = false;
+  }
 
   float value;
   m_efb_depth_cache.readback_texture->ReadTexel(x, y, &value);
@@ -423,35 +465,90 @@ void FramebufferManager::SetEFBCacheTileSize(u32 size)
     PanicAlertFmt("Failed to create EFB readback framebuffers");
 }
 
+void FramebufferManager::RefreshPeekCache()
+{
+  if (!m_efb_color_cache.needs_refresh && !m_efb_depth_cache.needs_refresh)
+  {
+    // The cache has already been refreshed.
+    return;
+  }
+
+  bool flush_command_buffer = false;
+  for (u32 i = 0; i < m_efb_color_cache.tiles.size(); i++)
+  {
+    if (m_efb_color_cache.tiles[i].frame_access_mask != 0 && !m_efb_color_cache.tiles[i].present)
+    {
+      PopulateEFBCache(false, i, true);
+      flush_command_buffer = true;
+    }
+    if (m_efb_depth_cache.tiles[i].frame_access_mask != 0 && !m_efb_depth_cache.tiles[i].present)
+    {
+      PopulateEFBCache(true, i, true);
+      flush_command_buffer = true;
+    }
+  }
+
+  m_efb_depth_cache.needs_refresh = false;
+  m_efb_color_cache.needs_refresh = false;
+
+  if (flush_command_buffer)
+  {
+    g_renderer->Flush();
+  }
+}
+
 void FramebufferManager::InvalidatePeekCache(bool forced)
 {
   if (forced || m_efb_color_cache.out_of_date)
   {
-    if (m_efb_color_cache.valid)
-      std::fill(m_efb_color_cache.tiles.begin(), m_efb_color_cache.tiles.end(), false);
+    if (m_efb_color_cache.has_active_tiles)
+    {
+      for (u32 i = 0; i < m_efb_color_cache.tiles.size(); i++)
+      {
+        m_efb_color_cache.tiles[i].present = false;
+      }
 
-    m_efb_color_cache.valid = false;
+      m_efb_color_cache.needs_refresh = true;
+    }
+
+    m_efb_color_cache.has_active_tiles = false;
     m_efb_color_cache.out_of_date = false;
   }
   if (forced || m_efb_depth_cache.out_of_date)
   {
-    if (m_efb_depth_cache.valid)
-      std::fill(m_efb_depth_cache.tiles.begin(), m_efb_depth_cache.tiles.end(), false);
+    if (m_efb_depth_cache.has_active_tiles)
+    {
+      for (u32 i = 0; i < m_efb_depth_cache.tiles.size(); i++)
+      {
+        m_efb_depth_cache.tiles[i].present = false;
+      }
 
-    m_efb_depth_cache.valid = false;
+      m_efb_depth_cache.needs_refresh = true;
+    }
+
+    m_efb_depth_cache.has_active_tiles = false;
     m_efb_depth_cache.out_of_date = false;
   }
 }
 
 void FramebufferManager::FlagPeekCacheAsOutOfDate()
 {
-  if (m_efb_color_cache.valid)
+  if (m_efb_color_cache.has_active_tiles)
     m_efb_color_cache.out_of_date = true;
-  if (m_efb_depth_cache.valid)
+  if (m_efb_depth_cache.has_active_tiles)
     m_efb_depth_cache.out_of_date = true;
 
   if (!g_ActiveConfig.bEFBAccessDeferInvalidation)
     InvalidatePeekCache();
+}
+
+void FramebufferManager::EndOfFrame()
+{
+  for (u32 i = 0; i < m_efb_color_cache.tiles.size(); i++)
+  {
+    m_efb_color_cache.tiles[i].frame_access_mask <<= 1;
+    m_efb_depth_cache.tiles[i].frame_access_mask <<= 1;
+  }
 }
 
 bool FramebufferManager::CompileReadbackPipelines()
@@ -487,6 +584,22 @@ bool FramebufferManager::CompileReadbackPipelines()
     m_efb_depth_resolve_pipeline = g_renderer->CreatePipeline(config);
     if (!m_efb_depth_resolve_pipeline)
       return false;
+
+    if (!g_ActiveConfig.backend_info.bSupportsPartialMultisampleResolve)
+    {
+      config.framebuffer_state.color_texture_format = GetEFBColorFormat();
+      auto color_resolve_shader = g_renderer->CreateShaderFromSource(
+          ShaderStage::Pixel,
+          FramebufferShaderGen::GenerateResolveColorPixelShader(GetEFBSamples()),
+          "Color resolve pixel shader");
+      if (!color_resolve_shader)
+        return false;
+
+      config.pixel_shader = color_resolve_shader.get();
+      m_efb_color_resolve_pipeline = g_renderer->CreatePipeline(config);
+      if (!m_efb_color_resolve_pipeline)
+        return false;
+    }
   }
 
   // EFB restore pipeline
@@ -564,17 +677,23 @@ bool FramebufferManager::CreateReadbackFramebuffer()
   if (!m_efb_color_cache.readback_texture || !m_efb_depth_cache.readback_texture)
     return false;
 
+  u32 total_tiles = 1;
   if (IsUsingTiledEFBCache())
   {
     const u32 tiles_wide = ((EFB_WIDTH + (m_efb_cache_tile_size - 1)) / m_efb_cache_tile_size);
     const u32 tiles_high = ((EFB_HEIGHT + (m_efb_cache_tile_size - 1)) / m_efb_cache_tile_size);
-    const u32 total_tiles = tiles_wide * tiles_high;
-    m_efb_color_cache.tiles.resize(total_tiles);
-    std::fill(m_efb_color_cache.tiles.begin(), m_efb_color_cache.tiles.end(), false);
-    m_efb_depth_cache.tiles.resize(total_tiles);
-    std::fill(m_efb_depth_cache.tiles.begin(), m_efb_depth_cache.tiles.end(), false);
-    m_efb_cache_tiles_wide = tiles_wide;
+    total_tiles = tiles_wide * tiles_high;
+    m_efb_cache_tile_row_stride = tiles_wide;
   }
+  else
+  {
+    m_efb_cache_tile_row_stride = 1;
+  }
+
+  m_efb_color_cache.tiles.resize(total_tiles);
+  std::fill(m_efb_color_cache.tiles.begin(), m_efb_color_cache.tiles.end(), EFBCacheTile{false, 0});
+  m_efb_depth_cache.tiles.resize(total_tiles);
+  std::fill(m_efb_depth_cache.tiles.begin(), m_efb_depth_cache.tiles.end(), EFBCacheTile{false, 0});
 
   return true;
 }
@@ -585,13 +704,14 @@ void FramebufferManager::DestroyReadbackFramebuffer()
     data.readback_texture.reset();
     data.framebuffer.reset();
     data.texture.reset();
-    data.valid = false;
+    data.needs_refresh = false;
+    data.has_active_tiles = false;
   };
   DestroyCache(m_efb_color_cache);
   DestroyCache(m_efb_depth_cache);
 }
 
-void FramebufferManager::PopulateEFBCache(bool depth, u32 tile_index)
+void FramebufferManager::PopulateEFBCache(bool depth, u32 tile_index, bool async)
 {
   FlushEFBPokes();
   g_vertex_manager->OnCPUEFBAccess();
@@ -651,11 +771,18 @@ void FramebufferManager::PopulateEFBCache(bool depth, u32 tile_index)
   }
 
   // Wait until the copy is complete.
-  data.readback_texture->Flush();
-  data.valid = true;
+  if (!async)
+  {
+    data.readback_texture->Flush();
+    data.needs_flush = false;
+  }
+  else
+  {
+    data.needs_flush = true;
+  }
+  data.has_active_tiles = true;
   data.out_of_date = false;
-  if (IsUsingTiledEFBCache())
-    data.tiles[tile_index] = true;
+  data.tiles[tile_index].present = true;
 }
 
 void FramebufferManager::ClearEFB(const MathUtil::Rectangle<int>& rc, bool clear_color,

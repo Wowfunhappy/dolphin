@@ -23,6 +23,7 @@
 #include "Core/Host.h"
 #include "Core/PowerPC/MMU.h"
 #include "Core/PowerPC/PowerPC.h"
+#include "Core/System.h"
 #include "VideoCommon/BPMemory.h"
 #include "VideoCommon/CommandProcessor.h"
 #include "VideoCommon/VideoCommon.h"
@@ -54,6 +55,11 @@ public:
   OPCODE_CALLBACK(void OnCommand(const u8* data, u32 size));
 
   OPCODE_CALLBACK(CPState& GetCPState()) { return m_cpmem; }
+
+  OPCODE_CALLBACK(u32 GetVertexSize(u8 vat))
+  {
+    return VertexLoaderBase::GetVertexSize(GetCPState().vtx_desc, GetCPState().vtx_attr[vat]);
+  }
 
   bool m_start_of_primitives = false;
   bool m_end_of_primitives = false;
@@ -488,12 +494,14 @@ void FifoPlayer::WriteAllMemoryUpdates()
 
 void FifoPlayer::WriteMemory(const MemoryUpdate& memUpdate)
 {
+  auto& system = Core::System::GetInstance();
+  auto& memory = system.GetMemory();
   u8* mem = nullptr;
 
   if (memUpdate.address & 0x10000000)
-    mem = &Memory::m_pEXRAM[memUpdate.address & Memory::GetExRamMask()];
+    mem = &memory.GetEXRAM()[memUpdate.address & memory.GetExRamMask()];
   else
-    mem = &Memory::m_pRAM[memUpdate.address & Memory::GetRamMask()];
+    mem = &memory.GetRAM()[memUpdate.address & memory.GetRamMask()];
 
   std::copy(memUpdate.data.begin(), memUpdate.data.end(), mem);
 }
@@ -503,6 +511,10 @@ void FifoPlayer::WriteFifo(const u8* data, u32 start, u32 end)
   u32 written = start;
   u32 lastBurstEnd = end - 1;
 
+  auto& system = Core::System::GetInstance();
+  auto& core_timing = system.GetCoreTiming();
+  auto& gpfifo = system.GetGPFifo();
+
   // Write up to 256 bytes at a time
   while (written < end)
   {
@@ -510,8 +522,8 @@ void FifoPlayer::WriteFifo(const u8* data, u32 start, u32 end)
     {
       if (CPU::GetState() != CPU::State::Running)
         break;
-      CoreTiming::Idle();
-      CoreTiming::Advance();
+      core_timing.Idle();
+      core_timing.Advance();
     }
 
     u32 burstEnd = std::min(written + 255, lastBurstEnd);
@@ -520,7 +532,7 @@ void FifoPlayer::WriteFifo(const u8* data, u32 start, u32 end)
     PowerPC::ppcState.gather_pipe_ptr += burstEnd - written;
     written = burstEnd;
 
-    GPFifo::Write8(data[written++]);
+    gpfifo.Write8(data[written++]);
 
     // Advance core timing
     u32 elapsedCycles = u32(((u64)written * m_CyclesPerFrame) / m_FrameFifoSize);
@@ -528,7 +540,7 @@ void FifoPlayer::WriteFifo(const u8* data, u32 start, u32 end)
     m_ElapsedCycles = elapsedCycles;
 
     PowerPC::ppcState.downcount -= cyclesUsed;
-    CoreTiming::Advance();
+    core_timing.Advance();
   }
 }
 
@@ -591,9 +603,9 @@ void FifoPlayer::ClearEfb()
   UPE_Copy copy = bpmem.triggerEFBCopy;
   copy.clamp_top = false;
   copy.clamp_bottom = false;
-  copy.yuv = false;
+  copy.unknown_bit = false;
   copy.target_pixel_format = static_cast<u32>(EFBCopyFormat::RGBA8) << 1;
-  copy.gamma = 0;
+  copy.gamma = GammaCorrection::Gamma1_0;
   copy.half_scale = false;
   copy.scale_invert = false;
   copy.clear = true;
@@ -696,55 +708,72 @@ void FifoPlayer::WritePI(u32 address, u32 value)
 
 void FifoPlayer::FlushWGP()
 {
+  auto& system = Core::System::GetInstance();
+  auto& gpfifo = system.GetGPFifo();
+
   // Send 31 0s through the WGP
   for (int i = 0; i < 7; ++i)
-    GPFifo::Write32(0);
-  GPFifo::Write16(0);
-  GPFifo::Write8(0);
+    gpfifo.Write32(0);
+  gpfifo.Write16(0);
+  gpfifo.Write8(0);
 
-  GPFifo::ResetGatherPipe();
+  gpfifo.ResetGatherPipe();
 }
 
 void FifoPlayer::WaitForGPUInactive()
 {
+  auto& core_timing = Core::System::GetInstance().GetCoreTiming();
+
   // Sleep while the GPU is active
   while (!IsIdleSet() && CPU::GetState() != CPU::State::PowerDown)
   {
-    CoreTiming::Idle();
-    CoreTiming::Advance();
+    core_timing.Idle();
+    core_timing.Advance();
   }
 }
 
 void FifoPlayer::LoadBPReg(u8 reg, u32 value)
 {
-  GPFifo::Write8(0x61);  // load BP reg
+  auto& system = Core::System::GetInstance();
+  auto& gpfifo = system.GetGPFifo();
+
+  gpfifo.Write8(0x61);  // load BP reg
 
   u32 cmd = (reg << 24) & 0xff000000;
   cmd |= (value & 0x00ffffff);
-  GPFifo::Write32(cmd);
+  gpfifo.Write32(cmd);
 }
 
 void FifoPlayer::LoadCPReg(u8 reg, u32 value)
 {
-  GPFifo::Write8(0x08);  // load CP reg
-  GPFifo::Write8(reg);
-  GPFifo::Write32(value);
+  auto& system = Core::System::GetInstance();
+  auto& gpfifo = system.GetGPFifo();
+
+  gpfifo.Write8(0x08);  // load CP reg
+  gpfifo.Write8(reg);
+  gpfifo.Write32(value);
 }
 
 void FifoPlayer::LoadXFReg(u16 reg, u32 value)
 {
-  GPFifo::Write8(0x10);                      // load XF reg
-  GPFifo::Write32((reg & 0x0fff) | 0x1000);  // load 4 bytes into reg
-  GPFifo::Write32(value);
+  auto& system = Core::System::GetInstance();
+  auto& gpfifo = system.GetGPFifo();
+
+  gpfifo.Write8(0x10);                      // load XF reg
+  gpfifo.Write32((reg & 0x0fff) | 0x1000);  // load 4 bytes into reg
+  gpfifo.Write32(value);
 }
 
 void FifoPlayer::LoadXFMem16(u16 address, const u32* data)
 {
+  auto& system = Core::System::GetInstance();
+  auto& gpfifo = system.GetGPFifo();
+
   // Loads 16 * 4 bytes in xf memory starting at address
-  GPFifo::Write8(0x10);                              // load XF reg
-  GPFifo::Write32(0x000f0000 | (address & 0xffff));  // load 16 * 4 bytes into address
+  gpfifo.Write8(0x10);                              // load XF reg
+  gpfifo.Write32(0x000f0000 | (address & 0xffff));  // load 16 * 4 bytes into address
   for (int i = 0; i < 16; ++i)
-    GPFifo::Write32(data[i]);
+    gpfifo.Write32(data[i]);
 }
 
 bool FifoPlayer::ShouldLoadBP(u8 address)

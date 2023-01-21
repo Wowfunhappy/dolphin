@@ -19,6 +19,7 @@
 #include "Core/HW/GPFifo.h"
 #include "Core/HW/HSP/HSP.h"
 #include "Core/HW/Memmap.h"
+#include "Core/HW/MemoryInterface.h"
 #include "Core/HW/ProcessorInterface.h"
 #include "Core/HW/SI/SI.h"
 #include "Core/HW/SystemTimers.h"
@@ -26,12 +27,14 @@
 #include "Core/HW/WII_IPC.h"
 #include "Core/IOS/IOS.h"
 #include "Core/State.h"
+#include "Core/System.h"
 
 namespace HW
 {
-void Init()
+void Init(const Sram* override_sram)
 {
-  CoreTiming::Init();
+  auto& system = Core::System::GetInstance();
+  system.GetCoreTiming().Init();
   SystemTimers::PreInit();
 
   State::Init();
@@ -40,14 +43,15 @@ void Init()
   AudioInterface::Init();
   VideoInterface::Init();
   SerialInterface::Init();
-  ProcessorInterface::Init();
-  ExpansionInterface::Init();  // Needs to be initialized before Memory
+  system.GetProcessorInterface().Init();
+  ExpansionInterface::Init(override_sram);  // Needs to be initialized before Memory
   HSP::Init();
-  Memory::Init();  // Needs to be initialized before AddressSpace
+  system.GetMemory().Init();  // Needs to be initialized before AddressSpace
   AddressSpace::Init();
+  MemoryInterface::Init();
   DSP::Init(Config::Get(Config::MAIN_DSP_HLE));
   DVDInterface::Init();
-  GPFifo::Init();
+  system.GetGPFifo().Init();
   CPU::Init(Config::Get(Config::MAIN_CPU_CORE));
   SystemTimers::Init();
 
@@ -60,6 +64,8 @@ void Init()
 
 void Shutdown()
 {
+  auto& system = Core::System::GetInstance();
+
   // IOS should always be shut down regardless of bWii because it can be running in GC mode (MIOS).
   IOS::HLE::Shutdown();  // Depends on Memory
   IOS::Shutdown();
@@ -68,32 +74,36 @@ void Shutdown()
   CPU::Shutdown();
   DVDInterface::Shutdown();
   DSP::Shutdown();
+  MemoryInterface::Shutdown();
   AddressSpace::Shutdown();
-  Memory::Shutdown();
+  system.GetMemory().Shutdown();
   HSP::Shutdown();
   ExpansionInterface::Shutdown();
   SerialInterface::Shutdown();
   AudioInterface::Shutdown();
 
   State::Shutdown();
-  CoreTiming::Shutdown();
+  system.GetCoreTiming().Shutdown();
 }
 
 void DoState(PointerWrap& p)
 {
-  Memory::DoState(p);
+  auto& system = Core::System::GetInstance();
+  system.GetMemory().DoState(p);
   p.DoMarker("Memory");
+  MemoryInterface::DoState(p);
+  p.DoMarker("MemoryInterface");
   VideoInterface::DoState(p);
   p.DoMarker("VideoInterface");
   SerialInterface::DoState(p);
   p.DoMarker("SerialInterface");
-  ProcessorInterface::DoState(p);
+  system.GetProcessorInterface().DoState(p);
   p.DoMarker("ProcessorInterface");
   DSP::DoState(p);
   p.DoMarker("DSP");
   DVDInterface::DoState(p);
   p.DoMarker("DVDInterface");
-  GPFifo::DoState(p);
+  system.GetGPFifo().DoState(p);
   p.DoMarker("GPFifo");
   ExpansionInterface::DoState(p);
   p.DoMarker("ExpansionInterface");

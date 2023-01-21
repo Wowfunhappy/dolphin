@@ -31,6 +31,7 @@
 #include "Core/PowerPC/JitInterface.h"
 #include "Core/PowerPC/MMU.h"
 #include "Core/PowerPC/PPCSymbolDB.h"
+#include "Core/System.h"
 
 namespace PowerPC
 {
@@ -68,7 +69,7 @@ void PairedSingle::SetPS1(double value)
   ps1 = Common::BitCast<u64>(value);
 }
 
-static void InvalidateCacheThreadSafe(u64 userdata, s64 cyclesLate)
+static void InvalidateCacheThreadSafe(Core::System& system, u64 userdata, s64 cyclesLate)
 {
   ppcState.iCache.Invalidate(static_cast<u32>(userdata));
 }
@@ -131,9 +132,20 @@ void DoState(PointerWrap& p)
   p.Do(ppcState.reserve_address);
 
   ppcState.iCache.DoState(p);
+  ppcState.dCache.DoState(p);
 
   if (p.IsReadMode())
   {
+    if (!ppcState.m_enable_dcache)
+    {
+      INFO_LOG_FMT(POWERPC, "Flushing data cache");
+      ppcState.dCache.FlushAll();
+    }
+    else
+    {
+      ppcState.dCache.Reset();
+    }
+
     RoundingModeUpdated();
     IBATUpdated();
     DBATUpdated();
@@ -258,13 +270,16 @@ CPUCore DefaultCPUCore()
 
 void Init(CPUCore cpu_core)
 {
-  s_invalidate_cache_thread_safe =
-      CoreTiming::RegisterEvent("invalidateEmulatedCache", InvalidateCacheThreadSafe);
+  s_invalidate_cache_thread_safe = Core::System::GetInstance().GetCoreTiming().RegisterEvent(
+      "invalidateEmulatedCache", InvalidateCacheThreadSafe);
 
   Reset();
 
   InitializeCPUCore(cpu_core);
   ppcState.iCache.Init();
+  ppcState.dCache.Init();
+
+  ppcState.m_enable_dcache = Config::Get(Config::MAIN_ACCURATE_CPU_CACHE);
 
   if (Config::Get(Config::MAIN_ENABLE_DEBUGGING))
     breakpoints.ClearAllTemporary();
@@ -278,14 +293,15 @@ void Reset()
 
   ResetRegisters();
   ppcState.iCache.Reset();
+  ppcState.dCache.Reset();
 }
 
 void ScheduleInvalidateCacheThreadSafe(u32 address)
 {
-  if (CPU::GetState() == CPU::State::Running)
+  if (CPU::GetState() == CPU::State::Running && !Core::IsCPUThread())
   {
-    CoreTiming::ScheduleEvent(0, s_invalidate_cache_thread_safe, address,
-                              CoreTiming::FromThread::NON_CPU);
+    Core::System::GetInstance().GetCoreTiming().ScheduleEvent(
+        0, s_invalidate_cache_thread_safe, address, CoreTiming::FromThread::NON_CPU);
   }
   else
   {
@@ -610,16 +626,18 @@ void CheckExternalExceptions()
 
 void CheckBreakPoints()
 {
-  if (!PowerPC::breakpoints.IsBreakPointEnable(PC))
+  const TBreakPoint* bp = PowerPC::breakpoints.GetBreakpoint(PC);
+
+  if (!bp || !bp->is_enabled || !EvaluateCondition(bp->condition))
     return;
 
-  if (PowerPC::breakpoints.IsBreakPointBreakOnHit(PC))
+  if (bp->break_on_hit)
   {
     CPU::Break();
     if (GDBStub::IsActive())
       GDBStub::TakeControl();
   }
-  if (PowerPC::breakpoints.IsBreakPointLogOnHit(PC))
+  if (bp->log_on_hit)
   {
     NOTICE_LOG_FMT(MEMMAP,
                    "BP {:08x} {}({:08x} {:08x} {:08x} {:08x} {:08x} {:08x} {:08x} {:08x} {:08x} "
