@@ -9,7 +9,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif()
 
 if(APPLE)
-  add_subdirectory(Metal)
+  # add_subdirectory(Metal)
 endif()
 
 if(ENABLE_VULKAN)
