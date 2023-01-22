@@ -649,7 +649,7 @@ if(ENABLE_VULKAN)
 endif()
 
 if(APPLE)
-  target_link_libraries(core PUBLIC videometal)
+  #target_link_libraries(core PUBLIC videometal)
 endif()
 
 if(USE_MGBA)

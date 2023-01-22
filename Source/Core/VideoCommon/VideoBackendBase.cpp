@@ -36,7 +36,7 @@
 #include "VideoBackends/Vulkan/VideoBackend.h"
 #endif
 #ifdef __APPLE__
-#include "VideoBackends/Metal/VideoBackend.h"
+//#include "VideoBackends/Metal/VideoBackend.h"
 #endif
 
 #include "VideoCommon/AsyncRequests.h"
@@ -231,7 +231,7 @@ const std::vector<std::unique_ptr<VideoBackendBase>>& VideoBackendBase::GetAvail
     backends.push_back(std::make_unique<DX12::VideoBackend>());
 #endif
 #ifdef __APPLE__
-    backends.push_back(std::make_unique<Metal::VideoBackend>());
+//    backends.push_back(std::make_unique<Metal::VideoBackend>());
 #endif
 #ifdef HAS_VULKAN
 #ifdef __APPLE__
