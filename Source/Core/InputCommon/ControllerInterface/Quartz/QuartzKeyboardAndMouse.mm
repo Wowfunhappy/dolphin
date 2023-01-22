@@ -55,7 +55,7 @@
 
 - (void)observeValueForKeyPath:(NSString*)keyPath
                       ofObject:(id)object
-                        change:(NSDictionary<NSKeyValueChangeKey, id>*)change
+                        change:(NSDictionary *)change
                        context:(void*)context
 {
   if (object == _window)
