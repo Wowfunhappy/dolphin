@@ -133,7 +133,7 @@ protected:
     return GetDigest();
   }
 
-  alignas(64) std::array<u8, BLOCK_LEN> block{};
+  std::array<u8, BLOCK_LEN> block{};
   size_t block_used{};
   size_t msg_len{};
 };
