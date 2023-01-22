@@ -1330,14 +1330,14 @@ inline auto format_as(std::byte b) -> unsigned char {
 }
 #endif
 
-template <typename T> struct has_format_as {
-  template <typename U, typename V = decltype(format_as(U())),
-            FMT_ENABLE_IF(std::is_enum<U>::value&& std::is_integral<V>::value)>
-  static auto check(U*) -> std::true_type;
-  static auto check(...) -> std::false_type;
-
-  enum { value = decltype(check(static_cast<T*>(nullptr)))::value };
-};
+//template <typename T> struct has_format_as {
+//  template <typename U, typename V = decltype(format_as(U())),
+//            FMT_ENABLE_IF(std::is_enum<U>::value&& std::is_integral<V>::value)>
+//  static auto check(U*) -> std::true_type;
+//  static auto check(...) -> std::false_type;
+//
+//  enum { value = decltype(check(static_cast<T*>(nullptr)))::value };
+//};
 
 // Maps formatting arguments to core types.
 // arg_mapper reports errors by returning unformattable instead of using
@@ -1464,8 +1464,7 @@ template <typename Context> struct arg_mapper {
 
   template <typename T,
             FMT_ENABLE_IF(
-                std::is_enum<T>::value&& std::is_convertible<T, int>::value &&
-                !has_format_as<T>::value && !has_formatter<T, Context>::value &&
+                std::is_enum<T>::value&& std::is_convertible<T, int>::value && !has_formatter<T, Context>::value &&
                 !has_fallback_formatter<T, char_type>::value)>
   FMT_DEPRECATED FMT_CONSTEXPR FMT_INLINE auto map(const T& val)
       -> decltype(std::declval<arg_mapper>().map(
@@ -1473,12 +1472,13 @@ template <typename Context> struct arg_mapper {
     return map(static_cast<underlying_t<T>>(val));
   }
 
-  template <typename T, FMT_ENABLE_IF(has_format_as<T>::value &&
-                                      !has_formatter<T, Context>::value)>
+  template <typename T, typename U = decltype(format_as(T())),
+      FMT_ENABLE_IF(std::is_enum<T>::value&& std::is_integral<U>::value)>
   FMT_CONSTEXPR FMT_INLINE auto map(const T& val)
-      -> decltype(std::declval<arg_mapper>().map(format_as(T()))) {
-    return map(format_as(val));
-  }
+        -> decltype(std::declval<arg_mapper>().map(U())) {
+      static_assert(!has_formatter<T, Context>::value, "");
+      return map(format_as(val));
+    }
 
   template <typename T, typename U = remove_cvref_t<T>>
   struct formattable
@@ -1507,7 +1507,6 @@ template <typename Context> struct arg_mapper {
             FMT_ENABLE_IF(!is_string<U>::value && !is_char<U>::value &&
                           !std::is_array<U>::value &&
                           !std::is_pointer<U>::value &&
-                          !has_format_as<U>::value &&
                           (has_formatter<U, Context>::value ||
                            has_fallback_formatter<U, char_type>::value))>
   FMT_CONSTEXPR FMT_INLINE auto map(T&& val)
