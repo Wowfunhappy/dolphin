@@ -642,7 +642,7 @@ void Init(const std::string& game_id)
       {
         hasbind = true;
         type = BIND_AXIS;
-        if (value.starts_with("Device ''"))
+        if (StringBeginsWith(value, "Device ''"))
           sscanf(value.c_str(), "Device ''-Axis %d%c", &bindnum, &modifier);
         else
           sscanf(value.c_str(), "Device '%127[^\']'-Axis %d%c", dev, &bindnum, &modifier);
@@ -651,7 +651,7 @@ void Init(const std::string& game_id)
       {
         hasbind = true;
         type = BIND_BUTTON;
-        if (value.starts_with("Device ''"))
+        if (StringBeginsWith(value, "Device ''"))
           sscanf(value.c_str(), "Device ''-Button %d", &bindnum);
         else
           sscanf(value.c_str(), "Device '%127[^\']'-Button %d", dev, &bindnum);

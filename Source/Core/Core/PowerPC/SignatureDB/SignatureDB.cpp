@@ -21,9 +21,9 @@ namespace
 {
 SignatureDB::HandlerType GetHandlerType(const std::string& file_path)
 {
-  if (file_path.ends_with(".csv"))
+  if (StringEndsWith(file_path, ".csv"))
     return SignatureDB::HandlerType::CSV;
-  if (file_path.ends_with(".mega"))
+  if (StringEndsWith(file_path, ".mega"))
     return SignatureDB::HandlerType::MEGA;
   return SignatureDB::HandlerType::DSY;
 }

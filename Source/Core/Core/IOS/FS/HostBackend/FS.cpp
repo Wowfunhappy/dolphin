@@ -31,7 +31,7 @@ HostFileSystem::HostFilename HostFileSystem::BuildFilename(const std::string& wi
 {
   for (const auto& redirect : m_nand_redirects)
   {
-    if (wii_path.starts_with(redirect.source_path) &&
+    if (StringBeginsWith(wii_path, redirect.source_path) &&
         (wii_path.size() == redirect.source_path.size() ||
          wii_path[redirect.source_path.size()] == '/'))
     {
@@ -121,9 +121,9 @@ HostFileSystem::HostFileSystem(const std::string& root_path,
                                std::vector<NandRedirect> nand_redirects)
     : m_root_path{root_path}, m_nand_redirects(std::move(nand_redirects))
 {
-  while (m_root_path.ends_with('/'))
+  while (StringEndsWith(m_root_path, "/"))
     m_root_path.pop_back();
-  File::CreateFullPath(m_root_path + '/');
+  File::CreateFullPath(m_root_path + "/");
   ResetFst();
   LoadFst();
 }
@@ -493,7 +493,7 @@ bool HostFileSystem::IsFileOpened(const std::string& path) const
 bool HostFileSystem::IsDirectoryInUse(const std::string& path) const
 {
   return std::any_of(m_handles.begin(), m_handles.end(), [&path](const Handle& handle) {
-    return handle.opened && handle.wii_path.starts_with(path);
+    return handle.opened && StringBeginsWith(handle.wii_path, path);
   });
 }
 

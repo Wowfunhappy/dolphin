@@ -107,7 +107,7 @@ static std::string ReadCpuinfoField(const std::string& field)
 
   while (std::getline(file, line))
   {
-    if (!line.starts_with(field))
+    if (!StringBeginsWith(line, field))
       continue;
     auto non_tab = line.find_first_not_of("\t", field.length());
     if (non_tab == line.npos)
