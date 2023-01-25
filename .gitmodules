@@ -48,6 +48,3 @@
 [submodule "Externals/implot/implot"]
 	path = Externals/implot/implot
 	url = https://github.com/epezent/implot.git
-[submodule "Externals/gtest"]
-	path = Externals/gtest
-	url = https://github.com/google/googletest.git
