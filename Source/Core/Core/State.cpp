@@ -5,7 +5,6 @@
 
 #include <atomic>
 #include <condition_variable>
-#include <filesystem>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -459,8 +458,7 @@ static void CompressAndDumpState(CompressAndDumpState_args& save_args)
     File::Rename(temp_filename, filename);
   }
 
-  std::filesystem::path tempfilename(filename);
-  Core::DisplayMessage(fmt::format("Saved State to {}", tempfilename.filename().string()), 2000);
+  Core::DisplayMessage(fmt::format("Saved State to {}", filename), 2000);
   Host_UpdateMainFrame();
 }
 
@@ -690,9 +688,7 @@ void LoadAs(const std::string& filename)
         {
           if (loadedSuccessfully)
           {
-            std::filesystem::path tempfilename(filename);
-            Core::DisplayMessage(
-                fmt::format("Loaded State from {}", tempfilename.filename().string()), 2000);
+            Core::DisplayMessage(fmt::format("Loaded state from {}", filename), 2000);
             if (File::Exists(filename + ".dtm"))
               Movie::LoadInput(filename + ".dtm");
             else if (!Movie::IsJustStartingRecordingInputFromSaveState() &&
