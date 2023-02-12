@@ -14,6 +14,10 @@ if (POLICY CMP0117)
   cmake_policy(SET CMP0117 NEW) # MSVC RTTI flag will not be added by default.
 endif()
 
+if (POLICY CMP0141)
+  cmake_policy(SET CMP0141 NEW) # MSVC debug information format flags are selected by an abstraction.
+endif()
+
 # Minimum OS X version.
 # This is inserted into the Info.plist as well.
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.9.0" CACHE STRING "")
@@ -127,15 +131,15 @@ include(CheckCCompilerFlag)
 include(CheckVendoringApproved)
 include(DolphinCompileDefinitions)
 include(DolphinDisableWarningsMSVC)
+include(DolphinLibraryTools)
+include(GNUInstallDirs)
 include(RemoveCompileFlag)
 
 # Enable folders for IDE
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # Set up paths
-set(bindir  ${CMAKE_INSTALL_PREFIX}/bin               CACHE PATH "bindir")
-set(datadir ${CMAKE_INSTALL_PREFIX}/share/dolphin-emu CACHE PATH "datadir")
-set(mandir  ${CMAKE_INSTALL_PREFIX}/share/man         CACHE PATH "mandir")
+set(datadir ${CMAKE_INSTALL_FULL_DATADIR}/dolphin-emu CACHE PATH "datadir")
 add_definitions(-DDATA_DIR="${datadir}/")
 
 if(CMAKE_SYSROOT)
@@ -751,30 +755,23 @@ endif()
 
 # macOS ships with liblzma.dylib but no headers, so check for the headers too
 find_package(LibLZMA)
-check_include_file(lzma.h HAVE_LZMA_H)
-if(LIBLZMA_FOUND AND HAVE_LZMA_H)
+if(LIBLZMA_FOUND)
+  # Imported target added in CMake 3.14
+  dolphin_make_imported_target_if_missing(LibLZMA::LibLZMA LIBLZMA)
   message(STATUS "Using shared lzma")
 else()
   check_vendoring_approved(lzma)
-  if(LIBLZMA_FOUND AND NOT HAVE_LZMA_H)
-    message(STATUS "Shared lzma found but lacks headers, falling back to the static library")
-  else()
-    message(STATUS "Shared lzma not found, falling back to the static library")
-  endif()
+  message(STATUS "Shared lzma not found, falling back to the static library")
   add_subdirectory(Externals/liblzma)
 endif()
 
-pkg_check_modules(ZSTD QUIET libzstd>=1.4.0)
-check_include_file(zstd.h HAVE_ZSTD_H)
-if(ZSTD_FOUND AND HAVE_ZSTD_H)
+pkg_check_modules(ZSTD QUIET libzstd>=1.4.0 IMPORTED_TARGET)
+if(ZSTD_FOUND)
   message(STATUS "Using shared zstd version: " ${ZSTD_VERSION})
+  dolphin_alias_library(zstd::zstd PkgConfig::ZSTD)
 else()
   check_vendoring_approved(zstd)
-  if(ZSTD_FOUND AND NOT HAVE_ZSTD_H)
-    message(STATUS "Shared zstd found but lacks headers, falling back to the static library")
-  else()
-    message(STATUS "Shared zstd not found, falling back to the static library")
-  endif()
+  message(STATUS "Shared zstd not found, falling back to the static library")
   add_subdirectory(Externals/zstd)
 endif()
 
@@ -803,7 +800,15 @@ else()
   set(LZO lzo2)
 endif()
 
-add_subdirectory(Externals/libspng)
+pkg_check_modules(pc_spng IMPORTED_TARGET spng)
+if (pc_spng_FOUND AND TARGET PkgConfig::pc_spng)
+  message(STATUS "Using the system libspng")
+  set(spng_target PkgConfig::pc_spng)
+else()
+  message(STATUS "Using static libspng from Externals")
+  add_subdirectory(Externals/libspng)
+  set(spng_target spng)
+endif()
 
 # Using static FreeSurround from Externals
 # There is no system FreeSurround library.
@@ -1022,9 +1027,9 @@ if(CMAKE_SYSTEM_NAME MATCHES "Linux|FreeBSD|OpenBSD")
           DESTINATION ${CMAKE_INSTALL_PREFIX}/share/applications)
   # Install manpages
   install(FILES Data/dolphin-emu.6
-          DESTINATION ${mandir}/man6)
+          DESTINATION ${CMAKE_INSTALL_MANDIR}/man6)
   install(FILES Data/dolphin-emu-nogui.6
-          DESTINATION ${mandir}/man6)
+          DESTINATION ${CMAKE_INSTALL_MANDIR}/man6)
 endif()
 
 # packaging information
