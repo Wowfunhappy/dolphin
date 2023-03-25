@@ -1,6 +1,6 @@
 # Dolphin for Legacy Mac OS X
 
-This build of Dolphin r16009 has been lightly modified to add compatibility with Mac OS X 10.9 Mavericks. It probably also works on OS X 10.10 – 10.13.
+This build of Dolphin r18688 has been lightly modified to add compatibility with Mac OS X 10.9 Mavericks. It probably also works on OS X 10.10 – 10.13.
 
 This was made possible primarily by MacPorts's toolchain backports and legacy-support library.
 
